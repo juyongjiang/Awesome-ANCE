@@ -2,14 +2,12 @@
 
 This repo provides personal implementation of paper [Approximate Nearest Neighbor Negative Contrastive Learning for Dense Text Retrieval](https://arxiv.org/pdf/2007.00808.pdf) in a simplified way. The code is refered to official version of [ANCE](https://github.com/microsoft/ANCE).
 
-## Requirements
-
-To install requirements, run the following commands:
-
-```setup
-git clone https://github.com/microsoft/ANCE
-cd ANCE
-python setup.py install
+## Environment
+```bash
+'transformers==2.3.0' 
+'pytrec-eval'
+'faiss-cpu'
+'python==3.6.*'
 ```
 
 ## Data Download
