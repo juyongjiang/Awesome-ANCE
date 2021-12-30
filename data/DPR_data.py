@@ -13,31 +13,19 @@ import csv
 from utils.util import multi_file_process, numbered_byte_file_generator, EmbeddingCache
 import pickle
 
-
 def normalize_question(question: str) -> str:
     if question[-1] == '?':
         question = question[:-1]
     return question
 
-
 def write_qas_query(args, qas_file, out_query_file):
     print("Writing qas query files " + str(out_query_file))
-    print("print",args.answer_dir,qas_file)
-    qas_path = os.path.join(
-        args.answer_dir,
-        qas_file,
-    )
-    out_query_path = os.path.join(
-        args.out_data_dir,
-        out_query_file ,
-    )
+    print("print", args.answer_dir, qas_file)
+    qas_path = os.path.join(args.answer_dir, qas_file,)
+    out_query_path = os.path.join(args.out_data_dir, out_query_file ,)
 
     configObj = MSMarcoConfigDict[args.model_type]
-    tokenizer = configObj.tokenizer_class.from_pretrained(
-        args.model_name_or_path,
-        do_lower_case=True,
-        cache_dir=None,
-    )
+    tokenizer = configObj.tokenizer_class.from_pretrained(args.model_name_or_path, do_lower_case=True, cache_dir=None,)
 
     qid = 0
     with open(qas_path, "r", encoding="utf-8") as f, open(out_query_path, "wb") as out_query:
@@ -53,13 +41,8 @@ def write_qas_query(args, qas_file, out_query_file):
 
 
 def write_query_rel(args, pid2offset, query_file, out_query_file, out_ann_file, out_train_file, passage_id_name="passage_id"):
-
     print("Writing query files " + str(out_query_file) + " and " + str(out_ann_file))
-
-    query_path = os.path.join(
-        args.question_dir,
-        query_file,
-    )
+    query_path = os.path.join(args.question_dir,query_file,)
 
     with open(query_path, 'r', encoding="utf-8") as f:
         data = json.load(f)
@@ -70,29 +53,13 @@ def write_query_rel(args, pid2offset, query_file, out_query_file, out_ann_file, 
     data = [r for r in data if len(r['hard_negative_ctxs']) > 0]
     print('Total cleaned data size: {}'.format(len(data)))
 
-    out_query_path = os.path.join(
-        args.out_data_dir,
-        out_query_file ,
-    )
-
-    out_ann_file = os.path.join(
-        args.out_data_dir,
-        out_ann_file ,
-    )
-
-    out_training_path = os.path.join(
-        args.out_data_dir,
-        out_train_file ,
-    )
-
+    out_query_path = os.path.join(args.out_data_dir,out_query_file ,)
+    out_ann_file = os.path.join(args.out_data_dir,out_ann_file ,)
+    out_training_path = os.path.join(args.out_data_dir, out_train_file ,)
     qid = 0
 
     configObj = MSMarcoConfigDict[args.model_type]
-    tokenizer = configObj.tokenizer_class.from_pretrained(
-        args.model_name_or_path,
-        do_lower_case=True,
-        cache_dir=None,
-    )
+    tokenizer = configObj.tokenizer_class.from_pretrained(args.model_name_or_path, do_lower_case=True, cache_dir=None,)
 
     with open(out_query_path, "wb") as out_query, \
             open(out_ann_file, "w", encoding='utf-8') as out_ann, \
@@ -118,22 +85,14 @@ def write_query_rel(args, pid2offset, query_file, out_query_file, out_ann_file, 
     with embedding_cache as emb:
         print(emb[0])
 
-
 def write_mapping(args, id2offset, out_name):
-    out_path = os.path.join(
-        args.out_data_dir,
-        out_name ,
-    )
+    out_path = os.path.join(args.out_data_dir, out_name,)
     with open(out_path, 'w') as f:
         for item in id2offset.items():
             f.write("{}\t{}\n".format(item[0], item[1]))
 
-
 def load_mapping(data_dir, out_name):
-    out_path = os.path.join(
-        data_dir,
-        out_name ,
-    )
+    out_path = os.path.join(data_dir, out_name,)
     pid2offset = {}
     offset2pid = {}
     with open(out_path, 'r') as f:
@@ -143,18 +102,10 @@ def load_mapping(data_dir, out_name):
             offset2pid[int(line_arr[1])] = int(line_arr[0])
     return pid2offset, offset2pid
 
-
 def preprocess(args):
-
     pid2offset = {}
-    in_passage_path = os.path.join(
-        args.wiki_dir,
-        "psgs_w100.tsv" ,
-    )
-    out_passage_path = os.path.join(
-        args.out_data_dir,
-        "passages" ,
-    )
+    in_passage_path = os.path.join(args.wiki_dir, "psgs_w100.tsv" ,)
+    out_passage_path = os.path.join(args.out_data_dir, "passages" ,)
 
     if os.path.exists(out_passage_path):
         print("preprocessed data already exist, exit preprocessing")
@@ -255,8 +206,7 @@ def PassagePreprocessingFn(args, line, tokenizer):
 
 
 def QueryPreprocessingFn(args, qid, text, tokenizer):
-    token_ids = tokenizer.encode(text, add_special_tokens=True, max_length=args.max_seq_length,
-                                       pad_to_max_length=False)
+    token_ids = tokenizer.encode(text, add_special_tokens=True, max_length=args.max_seq_length, pad_to_max_length=False)
 
     seq_len = args.max_seq_length
     passage_len = len(token_ids)
@@ -338,66 +288,26 @@ def GetTripletTrainingDataProcessingFn(args, query_cache, passage_cache, shuffle
             random.shuffle(neg_pids)
 
         neg_data = GetProcessingFn(args, query=False)(passage_cache[neg_pids[0]], neg_pids[0])[0]
-        yield (query_data[0], query_data[1], query_data[2], pos_data[0], pos_data[1], pos_data[2], 
-            neg_data[0], neg_data[1], neg_data[2])
+        yield (query_data[0], query_data[1], query_data[2], pos_data[0], pos_data[1], pos_data[2], neg_data[0], neg_data[1], neg_data[2])
 
     return fn
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--out_data_dir",
-        default="/webdata-nfs/jialliu/dpr/ann/ann_multi_data_256/",
-        type=str,
-        help="The output data dir",
-    )
-    parser.add_argument(
-        "--model_type",
-        default="dpr",
-        type=str,
-        help="Model type selected in the list: " + ", ".join(MSMarcoConfigDict.keys()),
-    )
-    parser.add_argument(
-        "--model_name_or_path",
-        default="bert-base-uncased",
-        type=str,
-        help="Path to pre-trained model or shortcut name selected in the list: " +
-        ", ".join(ALL_MODELS),
-    )
-    parser.add_argument(
-        "--max_seq_length",
-        default=256,
-        type=int,
-        help="The maximum total input sequence length after tokenization. Sequences longer "
-        "than this will be truncated, sequences shorter will be padded.",
-    )
-    parser.add_argument(
-        "--data_type",
-        default=0,
-        type=int,
-        help="0 is nq, 1 is trivia, 2 is both",
-    )
-    parser.add_argument(
-        "--question_dir",
-        type=str,
-        help="location of the raw QnA question data",
-    )
-    parser.add_argument(
-        "--wiki_dir",
-        type=str,
-        help="location of the wiki corpus",
-    )
-    parser.add_argument(
-        "--answer_dir",
-        type=str,
-        help="location of the QnA answers for evaluation",
-    )
+    parser.add_argument("--out_data_dir", default="/webdata-nfs/jialliu/dpr/ann/ann_multi_data_256/", type=str, help="The output data dir",)
+    parser.add_argument("--model_type", default="dpr", type=str, help="Model type selected in the list: " + ", ".join(MSMarcoConfigDict.keys()),)
+    parser.add_argument("--model_name_or_path", default="bert-base-uncased", type=str, help="Path to pre-trained model or shortcut name selected in the list: " + ", ".join(ALL_MODELS),)
+    parser.add_argument("--max_seq_length", default=256, type=int, help="The maximum total input sequence length after tokenization. Sequences longer " "than this will be truncated, sequences shorter will be padded.",)
+    parser.add_argument("--data_type", default=0, type=int, help="0 is nq, 1 is trivia, 2 is both",)
+    parser.add_argument("--question_dir", type=str, help="location of the raw QnA question data",)
+    parser.add_argument("--wiki_dir", type=str, help="location of the wiki corpus",)
+    parser.add_argument("--answer_dir", type=str, help="location of the QnA answers for evaluation",)
     args = parser.parse_args()
+
     if not os.path.exists(args.out_data_dir):
         os.makedirs(args.out_data_dir)
     preprocess(args)
-
 
 if __name__ == '__main__':
     main()
