@@ -56,15 +56,7 @@ class EmbeddingMixin:
 
 
 class NLL(EmbeddingMixin):
-    def forward(
-            self,
-            query_ids,
-            attention_mask_q,
-            input_ids_a=None,
-            attention_mask_a=None,
-            input_ids_b=None,
-            attention_mask_b=None,
-            is_query=True):
+    def forward(self, query_ids, attention_mask_q, input_ids_a=None, attention_mask_a=None, input_ids_b=None, attention_mask_b=None, is_query=True):
         if input_ids_b is None and is_query:
             return self.query_emb(query_ids, attention_mask_q)
         elif input_ids_b is None:
@@ -74,23 +66,14 @@ class NLL(EmbeddingMixin):
         a_embs = self.body_emb(input_ids_a, attention_mask_a)
         b_embs = self.body_emb(input_ids_b, attention_mask_b)
 
-        logit_matrix = torch.cat([(q_embs * a_embs).sum(-1).unsqueeze(1),
-                                  (q_embs * b_embs).sum(-1).unsqueeze(1)], dim=1)  # [B, 2]
+        logit_matrix = torch.cat([(q_embs * a_embs).sum(-1).unsqueeze(1), (q_embs * b_embs).sum(-1).unsqueeze(1)], dim=1)  # [B, 2]
         lsm = F.log_softmax(logit_matrix, dim=1)
         loss = -1.0 * lsm[:, 0]
         return (loss.mean(),)
 
 
 class NLL_MultiChunk(EmbeddingMixin):
-    def forward(
-            self,
-            query_ids,
-            attention_mask_q,
-            input_ids_a=None,
-            attention_mask_a=None,
-            input_ids_b=None,
-            attention_mask_b=None,
-            is_query=True):
+    def forward(self, query_ids, attention_mask_q, input_ids_a=None, attention_mask_a=None, input_ids_b=None, attention_mask_b=None, is_query=True):
         if input_ids_b is None and is_query:
             return self.query_emb(query_ids, attention_mask_q)
         elif input_ids_b is None:
@@ -104,31 +87,22 @@ class NLL_MultiChunk(EmbeddingMixin):
         chunk_factor = full_length // self.base_len
 
         # special handle of attention mask -----
-        attention_mask_body = attention_mask_a.reshape(
-            batchS, chunk_factor, -1)[:, :, 0]  # [batchS, chunk_factor]
+        attention_mask_body = attention_mask_a.reshape(batchS, chunk_factor, -1)[:, :, 0]  # [batchS, chunk_factor]
         inverted_bias = ((1 - attention_mask_body) * (-9999)).float()
 
-        a12 = torch.matmul(
-            q_embs.unsqueeze(1), a_embs.transpose(
-                1, 2))  # [batch, 1, chunk_factor]
-        logits_a = (a12[:, 0, :] + inverted_bias).max(dim=-
-                                                      1, keepdim=False).values  # [batch]
+        a12 = torch.matmul(q_embs.unsqueeze(1), a_embs.transpose(1, 2))  # [batch, 1, chunk_factor]
+        logits_a = (a12[:, 0, :] + inverted_bias).max(dim=-1, keepdim=False).values  # [batch]
         # -------------------------------------
 
         # special handle of attention mask -----
-        attention_mask_body = attention_mask_b.reshape(
-            batchS, chunk_factor, -1)[:, :, 0]  # [batchS, chunk_factor]
+        attention_mask_body = attention_mask_b.reshape(batchS, chunk_factor, -1)[:, :, 0]  # [batchS, chunk_factor]
         inverted_bias = ((1 - attention_mask_body) * (-9999)).float()
 
-        a12 = torch.matmul(
-            q_embs.unsqueeze(1), b_embs.transpose(
-                1, 2))  # [batch, 1, chunk_factor]
-        logits_b = (a12[:, 0, :] + inverted_bias).max(dim=-
-                                                      1, keepdim=False).values  # [batch]
+        a12 = torch.matmul(q_embs.unsqueeze(1), b_embs.transpose(1, 2))  # [batch, 1, chunk_factor]
+        logits_b = (a12[:, 0, :] + inverted_bias).max(dim=-1, keepdim=False).values  # [batch]
         # -------------------------------------
 
-        logit_matrix = torch.cat(
-            [logits_a.unsqueeze(1), logits_b.unsqueeze(1)], dim=1)  # [B, 2]
+        logit_matrix = torch.cat([logits_a.unsqueeze(1), logits_b.unsqueeze(1)], dim=1)  # [B, 2]
         lsm = F.log_softmax(logit_matrix, dim=1)
         loss = -1.0 * lsm[:, 0]
         return (loss.mean(),)
@@ -147,8 +121,7 @@ class RobertaDot_NLL_LN(NLL, RobertaForSequenceClassification):
         self.apply(self._init_weights)
 
     def query_emb(self, input_ids, attention_mask):
-        outputs1 = self.roberta(input_ids=input_ids,
-                                attention_mask=attention_mask)
+        outputs1 = self.roberta(input_ids=input_ids, attention_mask=attention_mask)
         full_emb = self.masked_mean_or_first(outputs1, attention_mask)
         query1 = self.norm(self.embeddingHead(full_emb))
         return query1
@@ -166,35 +139,18 @@ class RobertaDot_CLF_ANN_NLL_MultiChunk(NLL_MultiChunk, RobertaDot_NLL_LN):
         [batchS, full_length] = input_ids.size()
         chunk_factor = full_length // self.base_len
 
-        input_seq = input_ids.reshape(
-            batchS,
-            chunk_factor,
-            full_length //
-            chunk_factor).reshape(
-            batchS *
-            chunk_factor,
-            full_length //
-            chunk_factor)
-        attention_mask_seq = attention_mask.reshape(
-            batchS,
-            chunk_factor,
-            full_length //
-            chunk_factor).reshape(
-            batchS *
-            chunk_factor,
-            full_length //
-            chunk_factor)
+        input_seq = input_ids.reshape(batchS, chunk_factor, full_length //chunk_factor)
+                             .reshape(batchS *chunk_factor,full_length //chunk_factor)
+        attention_mask_seq = attention_mask.reshape(batchS, chunk_factor, full_length // chunk_factor)
+                                           .reshape(batchS * chunk_factor, full_length // chunk_factor)
 
-        outputs_k = self.roberta(input_ids=input_seq,
-                                 attention_mask=attention_mask_seq)
+        outputs_k = self.roberta(input_ids=input_seq, attention_mask=attention_mask_seq)
 
-        compressed_output_k = self.embeddingHead(
-            outputs_k[0])  # [batch, len, dim]
+        compressed_output_k = self.embeddingHead(outputs_k[0])  # [batch, len, dim]
         compressed_output_k = self.norm(compressed_output_k[:, 0, :])
 
         [batch_expand, embeddingS] = compressed_output_k.size()
-        complex_emb_k = compressed_output_k.reshape(
-            batchS, chunk_factor, embeddingS)
+        complex_emb_k = compressed_output_k.reshape(batchS, chunk_factor, embeddingS)
 
         return complex_emb_k  # size [batchS, chunk_factor, embeddingS]
 
@@ -234,8 +190,7 @@ class HFBertEncoder(BertModel):
         return cls.from_pretrained("bert-base-uncased", config=cfg)
     def forward(self, input_ids, attention_mask):
         hidden_states = None
-        sequence_output, pooled_output = super().forward(input_ids=input_ids,
-                                                         attention_mask=attention_mask)
+        sequence_output, pooled_output = super().forward(input_ids=input_ids, attention_mask=attention_mask)
         pooled_output = sequence_output[:, 0, :]
         return sequence_output, pooled_output, hidden_states
     def get_out_size(self):
@@ -270,18 +225,8 @@ class BiEncoder(nn.Module):
         loss = -1.0*lsm[:,0]
         return (loss.mean(),)
         
-
 # --------------------------------------------------
-ALL_MODELS = sum(
-    (
-        tuple(conf.pretrained_config_archive_map.keys())
-        for conf in (
-            RobertaConfig,
-        ) if hasattr(conf,'pretrained_config_archive_map')
-    ),
-    (),
-)
-
+ALL_MODELS = sum((tuple(conf.pretrained_config_archive_map.keys()) for conf in (RobertaConfig,) if hasattr(conf,'pretrained_config_archive_map')),(),)
 
 default_process_fn = triple_process_fn
 
@@ -295,28 +240,11 @@ class MSMarcoConfig:
         self.tokenizer_class = tokenizer_class
         self.config_class = config_class
 
-
 configs = [
-    MSMarcoConfig(name="rdot_nll",
-                model=RobertaDot_NLL_LN,
-                use_mean=False,
-                ),
-    MSMarcoConfig(name="rdot_nll_multi_chunk",
-                model=RobertaDot_CLF_ANN_NLL_MultiChunk,
-                use_mean=False,
-                ),
-    MSMarcoConfig(name="dpr",
-                model=BiEncoder,
-                tokenizer_class=BertTokenizer,
-                config_class=BertConfig,
-                use_mean=False,
-                ),
-    MSMarcoConfig(name="seeddot_nll",
-                model=SEEDEncoderDot_NLL_LN,
-                use_mean=False,
-                tokenizer_class=SEEDTokenizer,
-                config_class=SEEDEncoderConfig,
-                ),
+    MSMarcoConfig(name="rdot_nll", model=RobertaDot_NLL_LN, use_mean=False,),
+    MSMarcoConfig(name="rdot_nll_multi_chunk", model=RobertaDot_CLF_ANN_NLL_MultiChunk, use_mean=False,),
+    MSMarcoConfig(name="dpr", model=BiEncoder, tokenizer_class=BertTokenizer, config_class=BertConfig, use_mean=False,),
+    MSMarcoConfig(name="seeddot_nll", model=SEEDEncoderDot_NLL_LN, use_mean=False, tokenizer_class=SEEDTokenizer, config_class=SEEDEncoderConfig,),
 ]
 
 MSMarcoConfigDict = {cfg.name: cfg for cfg in configs}

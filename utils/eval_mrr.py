@@ -23,8 +23,7 @@ def embedding_inference(args, path, model, fn, bz, num_workers=2, is_query=True)
     for i, batch in tqdm(enumerate(loader), desc="Eval", disable=args.local_rank not in [-1, 0]):
         batch = tuple(t.to(args.device) for t in batch)
         with torch.no_grad():
-            inputs = {"input_ids": batch[0].long(
-            ), "attention_mask": batch[1].long()}
+            inputs = {"input_ids": batch[0].long(), "attention_mask": batch[1].long()}
             idx = batch[3].long()
             if is_query:
                 embs = model.query_emb(**inputs)
@@ -74,34 +73,26 @@ def search_knn(xq, xb, k, distance_type=faiss.METRIC_L2):
         heaps.nh = nq
         heaps.val = faiss.swig_ptr(D)
         heaps.ids = faiss.swig_ptr(I)
-        faiss.knn_L2sqr(
-            faiss.swig_ptr(xq), faiss.swig_ptr(xb),
-            d, nq, nb, heaps
-        )
+        faiss.knn_L2sqr(faiss.swig_ptr(xq), faiss.swig_ptr(xb),d, nq, nb, heaps)
     elif distance_type == faiss.METRIC_INNER_PRODUCT:
         heaps = faiss.float_minheap_array_t()
         heaps.k = k
         heaps.nh = nq
         heaps.val = faiss.swig_ptr(D)
         heaps.ids = faiss.swig_ptr(I)
-        faiss.knn_inner_product(
-            faiss.swig_ptr(xq), faiss.swig_ptr(xb),
-            d, nq, nb, heaps
-        )
+        faiss.knn_inner_product(faiss.swig_ptr(xq), faiss.swig_ptr(xb),d, nq, nb, heaps)
     return D, I
 
 
 def get_topk_restricted(q_emb, psg_emb_arr, pid_dict, psg_ids, pid_subset, top_k):
-    subset_ix = np.array([pid_dict[x]
-                          for x in pid_subset if x != -1 and x in pid_dict])
+    subset_ix = np.array([pid_dict[x] for x in pid_subset if x != -1 and x in pid_dict])
     if len(subset_ix) == 0:
         _D = np.ones((top_k,))*-128
         _I = (np.ones((top_k,))*-1).astype(int)
         return _D, _I
     else:
         sub_emb = psg_emb_arr[subset_ix]
-        _D, _I = search_knn(q_emb, sub_emb, top_k,
-                            distance_type=faiss.METRIC_INNER_PRODUCT)
+        _D, _I = search_knn(q_emb, sub_emb, top_k, distance_type=faiss.METRIC_INNER_PRODUCT)
         return _D.squeeze(), psg_ids[subset_ix[_I]].squeeze()  # (top_k,)
 
 
@@ -119,28 +110,24 @@ def passage_dist_eval(args, model, tokenizer):
     mrr_ref_path = os.path.join(base_path, "qrels.dev.small.tsv")
     ref_dict = load_reference(mrr_ref_path)
 
-    reranking_mrr, full_ranking_mrr = combined_dist_eval(
-        args, model, queries_path, passage_path, fn, fn, top1k_qid_pid, ref_dict)
+    reranking_mrr, full_ranking_mrr = combined_dist_eval(args, model, queries_path, passage_path, fn, fn, top1k_qid_pid, ref_dict)
     return reranking_mrr, full_ranking_mrr
 
 
 def combined_dist_eval(args, model, queries_path, passage_path, query_fn, psg_fn, topk_dev_qid_pid, ref_dict):
     # get query/psg embeddings here
     eval_batch_size = args.per_gpu_eval_batch_size * max(1, args.n_gpu)
-    query_embs, query_ids = embedding_inference(
-        args, queries_path, model, query_fn, eval_batch_size, 1, True)
+    query_embs, query_ids = embedding_inference(args, queries_path, model, query_fn, eval_batch_size, 1, True)
     query_pkl = {"emb": query_embs, "id": query_ids}
     all_query_list = all_gather(query_pkl)
     query_embs = concat_key(all_query_list, "emb")
     query_ids = concat_key(all_query_list, "id")
     print(query_embs.shape, query_ids.shape)
-    psg_embs, psg_ids = embedding_inference(
-        args, passage_path, model, psg_fn, eval_batch_size, 2, False)
+    psg_embs, psg_ids = embedding_inference(args, passage_path, model, psg_fn, eval_batch_size, 2, False)
     print(psg_embs.shape)
 
     top_k = 100
-    D, I = search_knn(query_embs, psg_embs, top_k,
-                      distance_type=faiss.METRIC_INNER_PRODUCT)
+    D, I = search_knn(query_embs, psg_embs, top_k, distance_type=faiss.METRIC_INNER_PRODUCT)
     I = psg_ids[I]
 
     # compute reranking and full ranking mrr here
@@ -151,8 +138,7 @@ def combined_dist_eval(args, model, queries_path, passage_path, query_fn, psg_fn
     for i, qid in enumerate(query_ids):
         q_emb = query_embs[i:i+1]
         pid_subset = topk_dev_qid_pid[qid]
-        ds, top_pids = get_topk_restricted(
-            q_emb, psg_embs, pid_dict, psg_ids, pid_subset, 10)
+        ds, top_pids = get_topk_restricted(q_emb, psg_embs, pid_dict, psg_ids, pid_subset, 10)
         arr_data.append(top_pids)
         d_data.append(ds)
     _D = np.array(d_data)
@@ -168,7 +154,6 @@ def combined_dist_eval(args, model, queries_path, passage_path, query_fn, psg_fn
     torch.cuda.empty_cache()
     dist.barrier()
     return reranking_mrr, full_ranking_mrr
-
 
 def compute_mrr(D, I, qids, ref_dict):
     knn_pkl = {"D": D, "I": I}

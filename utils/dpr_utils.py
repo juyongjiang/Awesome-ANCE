@@ -20,9 +20,7 @@ from utils.lamb import Lamb
 
 logger = logging.getLogger()
 
-CheckpointState = collections.namedtuple("CheckpointState",
-                                         ['model_dict', 'optimizer_dict', 'scheduler_dict', 'offset', 'epoch',
-                                          'encoder_params'])
+CheckpointState = collections.namedtuple("CheckpointState", ['model_dict', 'optimizer_dict', 'scheduler_dict', 'offset', 'epoch', 'encoder_params'])
 
 def get_encoder_checkpoint_params_names():
     return ['do_lower_case', 'pretrained_model_cfg', 'encoder_model_type',
@@ -50,8 +48,7 @@ def set_encoder_params_from_state(state, args):
     override_params = [(param, state[param]) for param in params_to_save if param in state and state[param]]
     for param, value in override_params:
         if hasattr(args, param):
-            logger.warning('Overriding args parameter value from checkpoint state. Param = %s, value = %s', param,
-                           value)
+            logger.warning('Overriding args parameter value from checkpoint state. Param = %s, value = %s', param, value)
         setattr(args, param, value)
     return args
 
@@ -80,8 +77,7 @@ def load_states_from_checkpoint(model_file: str) -> CheckpointState:
 def get_optimizer(args, model: nn.Module, weight_decay: float = 0.0, ) -> torch.optim.Optimizer:
     no_decay = ['bias', 'LayerNorm.weight']
     optimizer_grouped_parameters = [
-        {'params': [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
-         'weight_decay': weight_decay},
+        {'params': [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)], 'weight_decay': weight_decay},
         {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
     ]
     if args.optimizer == "adamW":
@@ -199,8 +195,7 @@ class DenseHNSWFlatIndexer(object):
 
             norms = [(doc_vector ** 2).sum() for doc_vector in vectors]
             aux_dims = [np.sqrt(phi - norm) for norm in norms]
-            hnsw_vectors = [np.hstack((doc_vector, aux_dims[i].reshape(-1, 1))) for i, doc_vector in
-                            enumerate(vectors)]
+            hnsw_vectors = [np.hstack((doc_vector, aux_dims[i].reshape(-1, 1))) for i, doc_vector in enumerate(vectors)]
             hnsw_vectors = np.concatenate(hnsw_vectors, axis=0)
 
             self._update_id_mapping(db_ids)
@@ -211,7 +206,6 @@ class DenseHNSWFlatIndexer(object):
         logger.info('Total data indexed %d', indexed_cnt)
 
     def search_knn(self, query_vectors: np.array, top_docs: int) -> List[Tuple[List[object], List[float]]]:
-
         aux_dim = np.zeros(len(query_vectors), dtype='float32')
         query_nhsw_vectors = np.hstack((query_vectors, aux_dim.reshape(-1, 1)))
         logger.info('query_hnsw_vectors %s', query_nhsw_vectors.shape)
@@ -223,7 +217,6 @@ class DenseHNSWFlatIndexer(object):
 
     def _update_id_mapping(self, db_ids: List):
         self.index_id_to_db_id.extend(db_ids)
-
 
 
 def check_answer(passages, answers, doc_ids, tokenizer):
@@ -270,13 +263,10 @@ class SimpleTokenizer:
         Args:
             annotators: None or empty set (only tokenizes).
         """
-        self._regexp = regex.compile(
-            '(%s)|(%s)' % (self.ALPHA_NUM, self.NON_WS),
-            flags=regex.IGNORECASE + regex.UNICODE + regex.MULTILINE
+        self._regexp = regex.compile('(%s)|(%s)' % (self.ALPHA_NUM, self.NON_WS), flags=regex.IGNORECASE + regex.UNICODE + regex.MULTILINE
         )
         if len(kwargs.get('annotators', {})) > 0:
-            logger.warning('%s only tokenizes! Skipping annotators: %s' %
-                           (type(self).__name__, kwargs.get('annotators')))
+            logger.warning('%s only tokenizes! Skipping annotators: %s' % (type(self).__name__, kwargs.get('annotators')))
         self.annotators = set()
 
     def tokenize(self, text):
@@ -295,11 +285,7 @@ class SimpleTokenizer:
                 end_ws = span[1]
 
             # Format data
-            data.append((
-                token,
-                text[start_ws: end_ws],
-                span,
-            ))
+            data.append((token, text[start_ws: end_ws], span,))
         return Tokens(data, self.annotators)
 
 
