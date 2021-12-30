@@ -1,31 +1,6 @@
 # Approximate Nearest Neighbor Negative Contrastive Learning for Dense Text Retrieval
-Lee Xiong*, Chenyan Xiong*, Ye Li, Kwok-Fung Tang, Jialin Liu, Paul Bennett, Junaid Ahmed, Arnold Overwijk
 
-This repo provides the code for reproducing the experiments in [Approximate Nearest Neighbor Negative Contrastive Learning for Dense Text Retrieval](https://arxiv.org/pdf/2007.00808.pdf) 
-
-Conducting text retrieval in a dense learned representation space has many intriguing advantages over sparse retrieval. Yet the effectiveness of dense retrieval (DR)
-often requires combination with sparse retrieval. In this paper, we identify that
-the main bottleneck is in the training mechanisms, where the negative instances
-used in training are not representative of the irrelevant documents in testing. This
-paper presents Approximate nearest neighbor Negative Contrastive Estimation
-(ANCE), a training mechanism that constructs negatives from an Approximate
-Nearest Neighbor (ANN) index of the corpus, which is parallelly updated with the
-learning process to select more realistic negative training instances. This fundamentally resolves the discrepancy between the data distribution used in the training
-and testing of DR. In our experiments, ANCE boosts the BERT-Siamese DR
-model to outperform all competitive dense and sparse retrieval baselines. It nearly
-matches the accuracy of sparse-retrieval-and-BERT-reranking using dot-product in
-the ANCE-learned representation space and provides almost 100x speed-up.
-
-Our analyses further confirm that the negatives from sparse retrieval or other sampling methods differ
-drastically from the actual negatives in DR, and that ANCE fundamentally resolves this mismatch.
-We also show the influence of the asynchronous ANN refreshing on learning convergence and
-demonstrate that the efficiency bottleneck is in the encoding update, not in the ANN part during
-ANCE training. These qualifications demonstrate the advantages, perhaps also the necessity, of our
-asynchronous ANCE learning in dense retrieval.
-
-## What's new
-* [September 2021 Released SEED-Encoder fine-tuning code.](https://github.com/microsoft/ANCE/tree/master/model/SEED_Encoder/SEED-Encoder.md)
-
+This repo provides personal implementation of paper [Approximate Nearest Neighbor Negative Contrastive Learning for Dense Text Retrieval](https://arxiv.org/pdf/2007.00808.pdf) in a simplified way. The code is refered to official version of [ANCE](https://github.com/microsoft/ANCE).
 
 ## Requirements
 
