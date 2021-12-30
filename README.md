@@ -7,10 +7,11 @@ This repo provides personal implementation of paper [Approximate Nearest Neighbo
 'transformers==2.3.0' 
 'pytrec-eval'
 'faiss-cpu'
+'wget'
 'python==3.6.*'
 ```
+## Data Download & Preprocessing
 
-## Data Download
 To download all the needed data, run:
 ```
 bash commands/data_download.sh 

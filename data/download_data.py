@@ -580,37 +580,32 @@ def download(data_name: str, resource_map: dict, resource_key: str, out_dir: str
 
     return data_files
 
-
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_name", default="MSMARCO", type=str, help="The name of dataset: MSMARCO or NQ_TQA")
+    parser.add_argument("--data_name", default=["MSMARCO", "NQ_TQA"], type=list, help="The list of dataset name")
     parser.add_argument("--output_dir", default="./", type=str, help="The output directory to download file")
-    parser.add_argument("--resource", type=list, help="Resource name. See RESOURCE_MAP for all possible values")
     args = parser.parse_args()
     
-    if args.data_name == "MSMARCO":
-        RESOURCE_MAP = MSMARCO_MAP
-        logger.info("data name %s", args.data_name)
-        args.resource = list(MSMARCO_MAP.keys())
-        logger.info("resource name %s", *args.resource)
-    elif args.data_name == "NQ_TQA":
-        RESOURCE_MAP = NQ_TQA_MAP
-        logger.info("data name %s", args.data_name)
-        args.resource = ["data.wikipedia_split.psgs_w100", "data.retriever.nq", "data.retriever.trivia", 
-                         "data.retriever.qas.nq", "data.retriever.qas.trivia", 
-                         "checkpoint.retriever.multiset.bert-base-encoder"]
-        logger.info("resource name %s", *args.resource)
-    else:
-        logger.info("no dataset support for %s", args.data_name)
-        raise NotImplementedError("Error: No dataset support for data name!")
-
-    if args.resource:
-        for resource_key in args.resource:
-            download(args.data_name, RESOURCE_MAP, resource_key, args.output_dir)
-    else:
-        print("Please specify resource value. Possible options are:")
-        for k, v in RESOURCE_MAP.items():
-            print("Resource key=%s  :  %s" % (k, v["desc"]))
+    for data_name in args.data_name:
+        if data_name == "MSMARCO":
+            RESOURCE_MAP = MSMARCO_MAP
+            logger.info("data name %s", data_name)
+            resource = list(MSMARCO_MAP.keys())
+            logger.info("resource name %s", *resource)
+            for resource_key in resource:
+                download(data_name, RESOURCE_MAP, resource_key, args.output_dir)
+        elif data_name == "NQ_TQA":
+            RESOURCE_MAP = NQ_TQA_MAP
+            logger.info("data name %s", data_name)
+            resource = ["data.wikipedia_split.psgs_w100", "data.retriever.nq", "data.retriever.trivia", 
+                            "data.retriever.qas.nq", "data.retriever.qas.trivia", 
+                            "checkpoint.retriever.multiset.bert-base-encoder"]
+            logger.info("resource name %s", *resource)
+            for resource_key in resource:
+                download(data_name, RESOURCE_MAP, resource_key, args.output_dir)
+        else:
+            logger.info("no dataset support for %s", data_name)
+            raise NotImplementedError("Error: No dataset support for data name!")
 
 if __name__ == "__main__":
     main()

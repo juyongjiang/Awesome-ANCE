@@ -4,7 +4,9 @@ commands/runs/
 runs/
 *.py[cod]
 *$py.class
-
+# Dataset
+data/MSMARCO/
+data/NQ_TQA/
 # C extensions
 *.so
 
