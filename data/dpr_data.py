@@ -295,7 +295,7 @@ def GetTripletTrainingDataProcessingFn(args, query_cache, passage_cache, shuffle
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--out_data_dir", default="/webdata-nfs/jialliu/dpr/ann/ann_multi_data_256/", type=str, help="The output data dir",)
+    parser.add_argument("--out_data_dir", default=None, type=str, help="The output data dir",)
     parser.add_argument("--model_type", default="dpr", type=str, help="Model type selected in the list: " + ", ".join(MSMarcoConfigDict.keys()),)
     parser.add_argument("--model_name_or_path", default="bert-base-uncased", type=str, help="Path to pre-trained model or shortcut name selected in the list: " + ", ".join(ALL_MODELS),)
     parser.add_argument("--max_seq_length", default=256, type=int, help="The maximum total input sequence length after tokenization. Sequences longer " "than this will be truncated, sequences shorter will be padded.",)

@@ -19,15 +19,27 @@ python download_data.py
 ```
 
 The command to preprocess passage and document data is listed below:
-
+MS MARCO (Passage | Document)
 ```bash
 python data/msmarco_data.py 
-        --data_dir $raw_data_dir \
-        --out_data_dir $preprocessed_data_dir \ 
+        --data_dir raw_data_dir \
+        --out_data_dir preprocessed_data_dir \ 
         --model_type {use rdot_nll for ANCE FirstP, rdot_nll_multi_chunk for ANCE MaxP} \ 
         --model_name_or_path roberta-base \ 
         --max_seq_length {use 512 for ANCE FirstP, 2048 for ANCE MaxP} \ 
         --data_type {use 1 for passage, 0 for document}
+```
+OpenQA (NA | TriviaQA)
+```bash
+python data/dpr_data.py 
+        --out_data_dir preprocessed_data_dir \ 
+        --model_type dpr \ 
+        --model_name_or_path bert-base-uncased \ 
+        --max_seq_length 256 \ 
+        --data_type {use 2 for both, use 1 for trivia, 0 for nq}
+        --question_dir raw_data_dir/raw_qna_question_data
+        --wiki_dir raw_data_dir/wiki_corpus
+        --answer_dir raw_data_dir/raw_qna_answers_data
 ```
 
 The data preprocessing command is included as the first step in the training command file commands/run_train.sh
