@@ -11,7 +11,7 @@ This repo provides personal implementation of paper [Approximate Nearest Neighbo
 'python==3.6.*'
 ```
 ## Data Download & Preprocessing
-**Download Dataset (skip if existed)**
+**Download Dataset (Skip if existed)**
 ```bash
 python data/download_data.py
 ```
@@ -26,7 +26,7 @@ python data/msmarco_data.py 
         --max_seq_length {use 512 for ANCE FirstP, 2048 for ANCE MaxP} \ 
         --data_type {use 1 for passage, 0 for document}
 ```
-**OpenQA (NA | TriviaQA)**
+**OpenQA (NQ | TriviaQA)**
 ```bash
 python data/dpr_data.py 
         --out_data_dir preprocessed_data_dir \ 
