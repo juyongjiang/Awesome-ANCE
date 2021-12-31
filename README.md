@@ -17,6 +17,7 @@ python data/download_data.py
 ```
 
 **MS MARCO (Passage | Document)**
+
 The command to preprocess passage and document data of MS MARCO is listed below:
 ```bash
 python data/msmarco_data.py 
@@ -28,6 +29,7 @@ python data/msmarco_data.py 
         --data_type {use 1 for passage, 0 for document}
 ```
 **OpenQA (NA | TriviaQA)**
+
 The command to preprocess na and triviaqa data of OpenQA is listed below:
 ```bash
 python data/dpr_data.py 
