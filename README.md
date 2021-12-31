@@ -33,6 +33,7 @@ The data preprocessing command is included as the first step in the training com
 
 ## Training
 To train the model(s) in the paper, you need to start two commands in the following order:
+
 **1.run `train.py` which does three things (a, b, c) in a sequence:**
 ```bash
 python train.py
