@@ -30,14 +30,14 @@ python data/msmarco_data.py 
 ```
 **OpenQA (NA | TriviaQA)**
 
-The command to preprocess na and triviaqa data of OpenQA is listed below:
+The command to preprocess na and trivia data of OpenQA is listed below:
 ```bash
 python data/dpr_data.py 
         --out_data_dir preprocessed_data_dir \ 
         --model_type dpr \ 
         --model_name_or_path bert-base-uncased \ 
         --max_seq_length 256 \ 
-        --data_type {use 2 for both, use 1 for trivia, 0 for nq}
+        --data_type {use 2 for both, 1 for trivia, 0 for nq}
         --question_dir raw_data_dir/raw_qna_question_data
         --wiki_dir raw_data_dir/wiki_corpus
         --answer_dir raw_data_dir/raw_qna_answers_data
