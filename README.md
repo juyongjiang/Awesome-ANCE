@@ -17,7 +17,6 @@ To download all the needed data, run:
 bash commands/data_download.sh 
 ```
 
-## Data Preprocessing
 The command to preprocess passage and document data is listed below:
 
 ```bash
