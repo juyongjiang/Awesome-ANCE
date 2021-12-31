@@ -19,7 +19,8 @@ python download_data.py
 ```
 
 The command to preprocess passage and document data is listed below:
-MS MARCO (Passage | Document)
+
+**MS MARCO (Passage | Document)**
 ```bash
 python data/msmarco_data.py 
         --data_dir raw_data_dir \
@@ -29,7 +30,7 @@ python data/msmarco_data.py 
         --max_seq_length {use 512 for ANCE FirstP, 2048 for ANCE MaxP} \ 
         --data_type {use 1 for passage, 0 for document}
 ```
-OpenQA (NA | TriviaQA)
+**OpenQA (NA | TriviaQA)**
 ```bash
 python data/dpr_data.py 
         --out_data_dir preprocessed_data_dir \ 
