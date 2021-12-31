@@ -11,6 +11,18 @@ This repo provides personal implementation of paper [Approximate Nearest Neighbo
 'python==3.6.*'
 ```
 ## Data Preparation
+```bash
+ANCE
+|--data
+    |--MSNARCO
+        |--doc        # raw data
+        |--passage    # raw data
+        |--ann_data_* # preprocessed data
+    |--NQ_TQA
+        |--checkpoint
+        |--data
+        |--ann_data_* # preprocessed data
+```
 **Download Dataset (Skip if existed)**
 ```bash
 python data/download_data.py
