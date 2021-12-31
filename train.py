@@ -1,5 +1,4 @@
 import sys
-sys.path += ['../']
 import os
 import torch
 from data.msmarco_data import GetTrainingDataProcessingFn, GetTripletTrainingDataProcessingFn
