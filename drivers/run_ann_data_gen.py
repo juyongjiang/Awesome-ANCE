@@ -39,10 +39,7 @@ import time
 import pytrec_eval
 
 torch.multiprocessing.set_sharing_strategy('file_system')
-
-
 logger = logging.getLogger(__name__)
-
 
 # ANN - active learning ------------------------------------------------------
 
@@ -62,17 +59,14 @@ def get_latest_checkpoint(args):
         scheduler_path = os.path.join(chk_path, "scheduler.pt")
         return os.path.exists(scheduler_path)
 
-    checkpoint_nums = [get_checkpoint_no(
-        s) for s in subdirectories if valid_checkpoint(s)]
+    checkpoint_nums = [get_checkpoint_no(s) for s in subdirectories if valid_checkpoint(s)]
 
     if len(checkpoint_nums) > 0:
-        return os.path.join(args.training_dir, "checkpoint-" +
-                            str(max(checkpoint_nums))) + "/", max(checkpoint_nums)
+        return os.path.join(args.training_dir, "checkpoint-" + str(max(checkpoint_nums))) + "/", max(checkpoint_nums)
     return args.init_model_dir, 0
 
 
 def load_positive_ids(args):
-
     logger.info("Loading query_2_pos_docid")
     training_query_positive_id = {}
     query_positive_id_path = os.path.join(args.data_dir, "train-qrel.tsv")
@@ -128,20 +122,14 @@ def load_model(args, checkpoint_path):
     if args.local_rank != -1:
         model = torch.nn.parallel.DistributedDataParallel(
             model,
-            device_ids=[
-                args.local_rank],
+            device_ids=[args.local_rank],
             output_device=args.local_rank,
             find_unused_parameters=True,
         )
     return config, tokenizer, model
 
 
-def InferenceEmbeddingFromStreamDataLoader(
-        args,
-        model,
-        train_dataloader,
-        is_query_inference=True,
-        prefix=""):
+def InferenceEmbeddingFromStreamDataLoader(args, model, train_dataloader, is_query_inference=True, prefix=""):
     # expect dataset from ReconstructTrainingSet
     results = {}
     eval_batch_size = args.per_gpu_eval_batch_size
@@ -157,21 +145,12 @@ def InferenceEmbeddingFromStreamDataLoader(
         dist.barrier()
     model.eval()
 
-    for batch in tqdm(train_dataloader,
-                      desc="Inferencing",
-                      disable=args.local_rank not in [-1,
-                                                      0],
-                      position=0,
-                      leave=True):
-
+    for batch in tqdm(train_dataloader, desc="Inferencing", disable=args.local_rank not in [-1, 0], position=0, leave=True):
         idxs = batch[3].detach().numpy()  # [#B]
-
         batch = tuple(t.to(args.device) for t in batch)
 
         with torch.no_grad():
-            inputs = {
-                "input_ids": batch[0].long(),
-                "attention_mask": batch[1].long()}
+            inputs = {"input_ids": batch[0].long(), "attention_mask": batch[1].long()}
             if is_query_inference:
                 embs = model.module.query_emb(**inputs)
             else:
@@ -197,59 +176,45 @@ def InferenceEmbeddingFromStreamDataLoader(
 def StreamInferenceDoc(args, model, fn, prefix, f, is_query_inference=True):
     inference_batch_size = args.per_gpu_eval_batch_size  # * max(1, args.n_gpu)
     inference_dataset = StreamingDataset(f, fn)
-    inference_dataloader = DataLoader(
-        inference_dataset,
-        batch_size=inference_batch_size)
+    inference_dataloader = DataLoader(inference_dataset, batch_size=inference_batch_size)
 
     if args.local_rank != -1:
         dist.barrier()  # directory created
 
     _embedding, _embedding2id = InferenceEmbeddingFromStreamDataLoader(
-        args, model, inference_dataloader, is_query_inference=is_query_inference, prefix=prefix)
+                                                                       args, 
+                                                                       model, 
+                                                                       inference_dataloader, 
+                                                                       is_query_inference=is_query_inference, 
+                                                                       prefix=prefix)
 
     logger.info("merging embeddings")
 
     # preserve to memory
-    full_embedding = barrier_array_merge(
-        args,
-        _embedding,
-        prefix=prefix +
-        "_emb_p_",
-        load_cache=False,
-        only_load_in_master=True)
-    full_embedding2id = barrier_array_merge(
-        args,
-        _embedding2id,
-        prefix=prefix +
-        "_embid_p_",
-        load_cache=False,
-        only_load_in_master=True)
+    full_embedding = barrier_array_merge(args, _embedding, prefix=prefix + "_emb_p_", load_cache=False, only_load_in_master=True)
+    full_embedding2id = barrier_array_merge(args, _embedding2id, prefix=prefix + "_embid_p_", load_cache=False, only_load_in_master=True)
 
     return full_embedding, full_embedding2id
 
 
-def generate_new_ann(
-        args,
-        output_num,
-        checkpoint_path,
-        training_query_positive_id,
-        dev_query_positive_id,
-        latest_step_num):
+def generate_new_ann(args, output_num, checkpoint_path, training_query_positive_id, dev_query_positive_id, latest_step_num):
     config, tokenizer, model = load_model(args, checkpoint_path)
 
     logger.info("***** inference of dev query *****")
     dev_query_collection_path = os.path.join(args.data_dir, "dev-query")
     dev_query_cache = EmbeddingCache(dev_query_collection_path)
     with dev_query_cache as emb:
-        dev_query_embedding, dev_query_embedding2id = StreamInferenceDoc(args, model, GetProcessingFn(
-            args, query=True), "dev_query_" + str(latest_step_num) + "_", emb, is_query_inference=True)
+        dev_query_embedding, dev_query_embedding2id = StreamInferenceDoc(args, model, GetProcessingFn(args, query=True), 
+                                                                         "dev_query_" + str(latest_step_num) + "_", emb, 
+                                                                         is_query_inference=True)
 
     logger.info("***** inference of passages *****")
     passage_collection_path = os.path.join(args.data_dir, "passages")
     passage_cache = EmbeddingCache(passage_collection_path)
     with passage_cache as emb:
-        passage_embedding, passage_embedding2id = StreamInferenceDoc(args, model, GetProcessingFn(
-            args, query=False), "passage_" + str(latest_step_num) + "_", emb, is_query_inference=False)
+        passage_embedding, passage_embedding2id = StreamInferenceDoc(args, model, GetProcessingFn(args, query=False), 
+                                                                     "passage_" + str(latest_step_num) + "_", emb, 
+                                                                     is_query_inference=False)
     logger.info("***** Done passage inference *****")
 
     if args.inference:
@@ -259,8 +224,10 @@ def generate_new_ann(
     train_query_collection_path = os.path.join(args.data_dir, "train-query")
     train_query_cache = EmbeddingCache(train_query_collection_path)
     with train_query_cache as emb:
-        query_embedding, query_embedding2id = StreamInferenceDoc(args, model, GetProcessingFn(
-            args, query=True), "query_" + str(latest_step_num) + "_", emb, is_query_inference=True)
+        query_embedding, query_embedding2id = StreamInferenceDoc(args, model, GetProcessingFn(args, query=True), 
+                                                                 "query_" + str(latest_step_num) + "_", 
+                                                                 emb, 
+                                                                 is_query_inference=True)
 
     if is_first_worker():
         dim = passage_embedding.shape[1]
@@ -274,8 +241,7 @@ def generate_new_ann(
         # measure ANN mrr
         # I: [number of queries, topk]
         _, dev_I = cpu_index.search(dev_query_embedding, 100)
-        dev_ndcg, num_queries_dev = EvalDevQuery(
-            args, dev_query_embedding2id, passage_embedding2id, dev_query_positive_id, dev_I)
+        dev_ndcg, num_queries_dev = EvalDevQuery(args, dev_query_embedding2id, passage_embedding2id, dev_query_positive_id, dev_I)
 
         # Construct new traing set ==================================
         chunk_factor = args.ann_chunk_factor
@@ -286,34 +252,25 @@ def generate_new_ann(
         num_queries = len(query_embedding)
         queries_per_chunk = num_queries // chunk_factor
         q_start_idx = queries_per_chunk * effective_idx
-        q_end_idx = num_queries if (
-            effective_idx == (
-                chunk_factor -
-                1)) else (
-            q_start_idx +
-            queries_per_chunk)
+        q_end_idx = num_queries if (effective_idx == (chunk_factor - 1)) else (q_start_idx + queries_per_chunk)
         query_embedding = query_embedding[q_start_idx:q_end_idx]
         query_embedding2id = query_embedding2id[q_start_idx:q_end_idx]
 
-        logger.info(
-            "Chunked {} query from {}".format(
-                len(query_embedding),
-                num_queries))
+        logger.info("Chunked {} query from {}".format(len(query_embedding), num_queries))
         # I: [number of queries, topk]
         _, I = cpu_index.search(query_embedding, top_k)
 
         effective_q_id = set(query_embedding2id.flatten())
         query_negative_passage = GenerateNegativePassaageID(
-            args,
-            query_embedding2id,
-            passage_embedding2id,
-            training_query_positive_id,
-            I,
-            effective_q_id)
+                                                            args,
+                                                            query_embedding2id,
+                                                            passage_embedding2id,
+                                                            training_query_positive_id,
+                                                            I,
+                                                            effective_q_id)
 
         logger.info("***** Construct ANN Triplet *****")
-        train_data_output_path = os.path.join(
-            args.output_dir, "ann_training_data_" + str(output_num))
+        train_data_output_path = os.path.join(args.output_dir, "ann_training_data_" + str(output_num))
 
         with open(train_data_output_path, 'w') as f:
             query_range = list(range(I.shape[0]))
@@ -323,33 +280,22 @@ def generate_new_ann(
                 if query_id not in effective_q_id or query_id not in training_query_positive_id:
                     continue
                 pos_pid = training_query_positive_id[query_id]
-                f.write(
-                    "{}\t{}\t{}\n".format(
-                        query_id, pos_pid, ','.join(
-                            str(neg_pid) for neg_pid in query_negative_passage[query_id])))
+                f.write("{}\t{}\t{}\n".format(query_id, pos_pid, ','.join(str(neg_pid) for neg_pid in query_negative_passage[query_id])))
 
-        ndcg_output_path = os.path.join(
-            args.output_dir, "ann_ndcg_" + str(output_num))
+        ndcg_output_path = os.path.join(args.output_dir, "ann_ndcg_" + str(output_num))
         with open(ndcg_output_path, 'w') as f:
             json.dump({'ndcg': dev_ndcg, 'checkpoint': checkpoint_path}, f)
 
         return dev_ndcg, num_queries_dev
 
 
-def GenerateNegativePassaageID(
-        args,
-        query_embedding2id,
-        passage_embedding2id,
-        training_query_positive_id,
-        I_nearest_neighbor,
-        effective_q_id):
+def GenerateNegativePassaageID(args, query_embedding2id, passage_embedding2id, training_query_positive_id, I_nearest_neighbor, effective_q_id):
     query_negative_passage = {}
     SelectTopK = args.ann_measure_topk_mrr
     mrr = 0  # only meaningful if it is SelectTopK = True
     num_queries = 0
 
     for query_idx in range(I_nearest_neighbor.shape[0]):
-
         query_id = query_embedding2id[query_idx]
 
         if query_id not in effective_q_id:

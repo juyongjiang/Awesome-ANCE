@@ -1,24 +1,4 @@
 #!/bin/bash
-#
-# This script is for training with updated ann driver
-#
-# The design for this ann driver is to have 2 separate processes for training: one for passage/query 
-# inference using trained checkpoint to generate ann data and calcuate ndcg, another for training the model 
-# using the ann data generated. Data between processes is shared on common directory, model_dir for checkpoints
-# and model_ann_data_dir for ann data.
-#
-# This script initialize the training and start the model training process
-# It first preprocess the msmarco data into indexable cache, then generate a single initial ann data
-# version to train on, after which it start training on the generated ann data, continously looking for
-# newest ann data generated in model_ann_data_dir
-#
-# To start training, you'll need to run this script first
-# after intial ann data is created (you can tell by either finding "successfully created 
-# initial ann training data" in console output or if you start seeing new model on tensorboard),
-# start run_ann_data_gen.sh in another dlts job (or same dlts job using split GPU)
-#
-# Note if preprocess directory or ann data directory already exist, those steps will be skipped
-# and training will start immediately
 
 # # Passage ANCE(FirstP) 
 # gpu_no=4

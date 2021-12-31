@@ -42,16 +42,7 @@ class InputFeaturesPair(object):
         label: Label corresponding to the input
     """
 
-    def __init__(
-            self,
-            input_ids_a,
-            attention_mask_a=None,
-            token_type_ids_a=None,
-            input_ids_b=None,
-            attention_mask_b=None,
-            token_type_ids_b=None,
-            label=None):
-
+    def __init__(self, input_ids_a, attention_mask_a=None, token_type_ids_a=None, input_ids_b=None, attention_mask_b=None, token_type_ids_b=None, label=None):
         self.input_ids_a = input_ids_a
         self.attention_mask_a = attention_mask_a
         self.token_type_ids_a = token_type_ids_a
@@ -84,13 +75,7 @@ def getattr_recursive(obj, name):
     return obj
 
 
-def barrier_array_merge(
-        args,
-        data_array,
-        merge_axis=0,
-        prefix="",
-        load_cache=False,
-        only_load_in_master=False):
+def barrier_array_merge(args, data_array, merge_axis=0, prefix="", load_cache=False, only_load_in_master=False):
     # data array: [B, any dimension]
     # merge alone one axis
 
@@ -104,11 +89,7 @@ def barrier_array_merge(
                 os.makedirs(args.output_dir)
 
         dist.barrier()  # directory created
-        pickle_path = os.path.join(
-            args.output_dir,
-            "{1}_data_obj_{0}.pb".format(
-                str(rank),
-                prefix))
+        pickle_path = os.path.join(args.output_dir, "{1}_data_obj_{0}.pb".format(str(rank), prefix))
         with open(pickle_path, 'wb') as handle:
             pickle.dump(data_array, handle, protocol=4)
 
@@ -126,13 +107,8 @@ def barrier_array_merge(
             dist.barrier()
             return None
 
-    for i in range(
-            args.world_size):  # TODO: dynamically find the max instead of HardCode
-        pickle_path = os.path.join(
-            args.output_dir,
-            "{1}_data_obj_{0}.pb".format(
-                str(i),
-                prefix))
+    for i in range(args.world_size):  # TODO: dynamically find the max instead of HardCode
+        pickle_path = os.path.join(args.output_dir, "{1}_data_obj_{0}.pb".format(str(i), prefix))
         try:
             with open(pickle_path, 'rb') as handle:
                 b = pickle.load(handle)
@@ -145,9 +121,7 @@ def barrier_array_merge(
     return data_array_agg
 
 
-def pad_input_ids(input_ids, max_length,
-                  pad_on_left=False,
-                  pad_token=0):
+def pad_input_ids(input_ids, max_length, pad_on_left=False, pad_token=0):
     padding_length = max_length - len(input_ids)
     padding_id = [pad_token] * padding_length
 
@@ -231,14 +205,12 @@ def get_latest_ann_data(ann_data_path):
         return -1, None, None
     files = list(next(os.walk(ann_data_path))[2])
     num_start_pos = len(ANN_PREFIX)
-    data_no_list = [int(s[num_start_pos:])
-                    for s in files if s[:num_start_pos] == ANN_PREFIX]
+    data_no_list = [int(s[num_start_pos:]) for s in files if s[:num_start_pos] == ANN_PREFIX]
     if len(data_no_list) > 0:
         data_no = max(data_no_list)
         with open(os.path.join(ann_data_path, ANN_PREFIX + str(data_no)), 'r') as f:
             ndcg_json = json.load(f)
-        return data_no, os.path.join(
-            ann_data_path, "ann_training_data_" + str(data_no)), ndcg_json
+        return data_no, os.path.join(ann_data_path, "ann_training_data_" + str(data_no)), ndcg_json
     return -1, None, None
 
 
@@ -260,11 +232,9 @@ class EmbeddingCache:
             meta = json.load(f)
             self.dtype = np.dtype(meta['type'])
             self.total_number = meta['total_number']
-            self.record_size = int(
-                meta['embedding_size']) * self.dtype.itemsize + 4
+            self.record_size = int(meta['embedding_size']) * self.dtype.itemsize + 4
         if seed >= 0:
-            self.ix_array = np.random.RandomState(
-                seed).permutation(self.total_number)
+            self.ix_array = np.random.RandomState(seed).permutation(self.total_number)
         else:
             self.ix_array = np.arange(self.total_number)
         self.f = None
@@ -291,8 +261,7 @@ class EmbeddingCache:
     def __getitem__(self, key):
         if key < 0 or key > self.total_number:
             raise IndexError(
-                "Index {} is out of bound for cached embeddings of size {}".format(
-                    key, self.total_number))
+                "Index {} is out of bound for cached embeddings of size {}".format(key, self.total_number))
         self.f.seek(key * self.record_size)
         return self.read_single_record()
 
@@ -329,13 +298,8 @@ class StreamingDataset(IterableDataset):
 
 
 def tokenize_to_file(args, i, num_process, in_path, out_path, line_fn):
-
     configObj = MSMarcoConfigDict[args.model_type]
-    tokenizer = configObj.tokenizer_class.from_pretrained(
-        args.model_name_or_path,
-        do_lower_case=True,
-        cache_dir=None,
-    )
+    tokenizer = configObj.tokenizer_class.from_pretrained(args.model_name_or_path, do_lower_case=True, cache_dir=None,)
 
     with open(in_path, 'r', encoding='utf-8') if in_path[-2:] != "gz" else gzip.open(in_path, 'rt', encoding='utf8') as in_f,\
             open('{}_split{}'.format(out_path, i), 'wb') as out_f:
@@ -348,16 +312,7 @@ def tokenize_to_file(args, i, num_process, in_path, out_path, line_fn):
 def multi_file_process(args, num_process, in_path, out_path, line_fn):
     processes = []
     for i in range(num_process):
-        p = Process(
-            target=tokenize_to_file,
-            args=(
-                args,
-                i,
-                num_process,
-                in_path,
-                out_path,
-                line_fn,
-            ))
+        p = Process(target=tokenize_to_file, args=(args, i, num_process, in_path, out_path, line_fn,))
         processes.append(p)
         p.start()
     for p in processes:
