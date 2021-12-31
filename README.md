@@ -14,7 +14,8 @@ This repo provides personal implementation of paper [Approximate Nearest Neighbo
 
 To download all the needed data, run:
 ```bash
-python data/download_data.py
+cd data
+python download_data.py
 ```
 
 The command to preprocess passage and document data is listed below:
