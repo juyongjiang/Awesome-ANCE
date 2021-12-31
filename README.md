@@ -11,7 +11,8 @@ This repo provides personal implementation of paper [Approximate Nearest Neighbo
 'python==3.6.*'
 ```
 ## Data Download & Preprocessing
-**Download Dataset
+**Download Dataset**
+
 To download all the needed data (skip if existed), run:
 ```bash
 python data/download_data.py
