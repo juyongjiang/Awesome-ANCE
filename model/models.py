@@ -139,10 +139,8 @@ class RobertaDot_CLF_ANN_NLL_MultiChunk(NLL_MultiChunk, RobertaDot_NLL_LN):
         [batchS, full_length] = input_ids.size()
         chunk_factor = full_length // self.base_len
 
-        input_seq = input_ids.reshape(batchS, chunk_factor, full_length //chunk_factor)
-                             .reshape(batchS *chunk_factor,full_length //chunk_factor)
-        attention_mask_seq = attention_mask.reshape(batchS, chunk_factor, full_length // chunk_factor)
-                                           .reshape(batchS * chunk_factor, full_length // chunk_factor)
+        input_seq = input_ids.reshape(batchS, chunk_factor, full_length //chunk_factor).reshape(batchS *chunk_factor,full_length //chunk_factor)
+        attention_mask_seq = attention_mask.reshape(batchS, chunk_factor, full_length // chunk_factor).reshape(batchS * chunk_factor, full_length // chunk_factor)
 
         outputs_k = self.roberta(input_ids=input_seq, attention_mask=attention_mask_seq)
 

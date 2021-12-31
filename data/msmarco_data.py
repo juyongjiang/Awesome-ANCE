@@ -1,18 +1,19 @@
 import sys
+sys.path += ['./']
 import os
 import torch
-sys.path += ['../']
 import gzip
-import pickle
-from utils.util import pad_input_ids, multi_file_process, numbered_byte_file_generator, EmbeddingCache
 import csv
-from model.models import MSMarcoConfigDict, ALL_MODELS
-from torch.utils.data import DataLoader, Dataset, TensorDataset, IterableDataset, get_worker_info
-import numpy as np
-from os import listdir
-from os.path import isfile, join
+import pickle
 import argparse
 import json
+import numpy as np
+
+from utils.util import pad_input_ids, multi_file_process, numbered_byte_file_generator, EmbeddingCache
+from model.models import MSMarcoConfigDict, ALL_MODELS
+from torch.utils.data import DataLoader, Dataset, TensorDataset, IterableDataset, get_worker_info
+from os import listdir
+from os.path import isfile, join
 
 
 def write_query_rel(args, pid2offset, query_file, positive_id_file, out_query_file, out_id_file):
@@ -89,11 +90,11 @@ def write_query_rel(args, pid2offset, query_file, positive_id_file, out_query_fi
         print("Total lines written: " + str(out_line_count))
 
 def preprocess(args):
+    args.data_dir = os.path.join(args.data_dir, "doc") if args.data_type == 0 else os.path.join(args.data_dir, "passage")
+    args.out_data_dir = args.out_data_dir + "_{}_{}_{}".format(args.model_name_or_path, args.max_seq_length, args.data_type)
+    
     if not os.path.exists(args.out_data_dir):
         os.makedirs(args.out_data_dir)
-    
-    args.data_dir = os.path.join(args.data_dir, "doc") if args.data_type == 0 else os.path.join(args.data_dir, "passage")
-    args.out_data_dir = args.out_data_dir.join("_{}_{}".format(args.model_name_or_path))
     
     pid2offset = {}
     if args.data_type == 0:
@@ -258,10 +259,10 @@ def GetTripletTrainingDataProcessingFn(args, query_cache, passage_cache):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_dir", default="./data/MSMARCO", type=str, required=True, help="The input data dir",)
-    parser.add_argument("--out_data_dir", default="./data/MSMARCO/ann_data", type=str, required=True, help="The output data dir",)
-    parser.add_argument("--model_type", default="rdot_nll_multi_chunk", type=str, required=True, help="Model type selected in the list: " + ", ".join(MSMarcoConfigDict.keys()),)
-    parser.add_argument("--model_name_or_path", default="roberta-base", type=str, required=True, help="Path to pre-trained model or shortcut name selected in the list: " +", ".join(ALL_MODELS),)
+    parser.add_argument("--data_dir", default="./data/MSMARCO", type=str, help="The input data dir",)
+    parser.add_argument("--out_data_dir", default="./data/MSMARCO/ann_data", type=str, help="The output data dir",)
+    parser.add_argument("--model_type", default="rdot_nll_multi_chunk", type=str, help="Model type selected in the list: " + ", ".join(MSMarcoConfigDict.keys()),)
+    parser.add_argument("--model_name_or_path", default="roberta-base", type=str, help="Path to pre-trained model or shortcut name selected in the list: " +", ".join(ALL_MODELS),)
     parser.add_argument("--max_seq_length", default=2048, type=int, help="The maximum total input sequence length after tokenization. Sequences longer ""than this will be truncated, sequences shorter will be padded.",)
     parser.add_argument("--max_query_length", default=64, type=int, help="The maximum total input sequence length after tokenization. Sequences longer ""than this will be truncated, sequences shorter will be padded.",)
     parser.add_argument("--max_doc_character", default=10000, type=int, help="used before tokenizer to save tokenizer latency",)

@@ -1,3 +1,5 @@
+import sys
+sys.path += ['./']
 import argparse
 import gzip
 import tarfile
@@ -22,21 +24,21 @@ MSMARCO_MAP = {
     # MSMARCO passage data
     "passage.collectionandqueries": {
         "s3_url": "https://msmarco.blob.core.windows.net/msmarcoranking/collectionandqueries.tar.gz",
-        "original_ext": ".tsv",
+        "original_ext": "",
         "compressed": True,
         "zip_format": ".tar.gz",
         "desc": "MSMARCO passage.collectionandqueries",
     },
     "passage.top1000.dev": {
         "s3_url": "https://msmarco.blob.core.windows.net/msmarcoranking/top1000.dev.tar.gz",
-        "original_ext": ".tsv",
+        "original_ext": "",
         "compressed": True,
         "zip_format": ".tar.gz",
         "desc": "MSMARCO passage.top1000.dev",
     },
     "passage.triples.train.small": {
         "s3_url": "https://msmarco.blob.core.windows.net/msmarcoranking/triples.train.small.tar.gz",
-        "original_ext": ".tsv",
+        "original_ext": "",
         "compressed": True,
         "zip_format": ".tar.gz",
         "desc": "MSMARCO passage.triples.train.small",
@@ -461,6 +463,7 @@ def unpack(gzip_file: str, out_file: str, zip_format: str = ".gz"):
         output.close()
     elif zip_format == ".tar.gz":
         t = tarfile.open(gzip_file)
+        out_file = os.path.dirname(out_file)
         t.extractall(path = out_file)   
     logger.info(" Saved to %s", out_file)
 
@@ -583,8 +586,8 @@ def download(data_name: str, resource_map: dict, resource_key: str, out_dir: str
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_name", default=["MSMARCO", "NQ_TQA"], type=list, help="The list of dataset name")
-    parser.add_argument("--output_dir", default="./", type=str, help="The output directory to download file")
+    parser.add_argument("--data_name", default=["MSMARCO"], type=list, help="The list of dataset name")
+    parser.add_argument("--output_dir", default="./data", type=str, help="The output directory to download file")
     args = parser.parse_args()
     
     for data_name in args.data_name:

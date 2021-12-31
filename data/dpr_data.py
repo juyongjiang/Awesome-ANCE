@@ -1,17 +1,19 @@
-from os.path import join
 import sys
-sys.path += ['../']
+sys.path += ['./']
 import argparse
 import json
 import os
 import random
 import numpy as np
 import torch
+import csv
+import pickle
+
+from os.path import join
 from torch.utils.data import Dataset, TensorDataset
 from model.models import MSMarcoConfigDict, ALL_MODELS
-import csv
 from utils.util import multi_file_process, numbered_byte_file_generator, EmbeddingCache
-import pickle
+
 
 def normalize_question(question: str) -> str:
     if question[-1] == '?':
@@ -295,7 +297,7 @@ def GetTripletTrainingDataProcessingFn(args, query_cache, passage_cache, shuffle
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--out_data_dir", default=None, type=str, help="The output data dir",)
+    parser.add_argument("--out_data_dir", default="./data/NQ_TQA/ann_data", type=str, help="The output data dir",)
     parser.add_argument("--model_type", default="dpr", type=str, help="Model type selected in the list: " + ", ".join(MSMarcoConfigDict.keys()),)
     parser.add_argument("--model_name_or_path", default="bert-base-uncased", type=str, help="Path to pre-trained model or shortcut name selected in the list: " + ", ".join(ALL_MODELS),)
     parser.add_argument("--max_seq_length", default=256, type=int, help="The maximum total input sequence length after tokenization. Sequences longer " "than this will be truncated, sequences shorter will be padded.",)
