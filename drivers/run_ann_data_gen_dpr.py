@@ -65,7 +65,6 @@ def load_data(args):
     test_qa_path = os.path.join(args.test_qa_path, "nq-test.csv")
     trivia_test_qa_path = os.path.join(args.trivia_test_qa_path, "trivia-test.csv")
     train_ann_path = os.path.join(args.data_dir, "train-ann")
-
     pid2offset, offset2pid = load_mapping(args.data_dir, "pid2offset")
 
     passage_text = {}
@@ -126,8 +125,10 @@ def load_model(args, checkpoint_path):
     model.to(args.device)
     logger.info("Inference parameters %s", args)
     if args.local_rank != -1:
-        model = torch.nn.parallel.DistributedDataParallel(
-            model, device_ids=[args.local_rank], output_device=args.local_rank, find_unused_parameters=True,
+        model = torch.nn.parallel.DistributedDataParallel(model, 
+                                                          device_ids=[args.local_rank], 
+                                                          output_device=args.local_rank, 
+                                                          find_unused_parameters=True,
         )
     return model
 
@@ -149,9 +150,7 @@ def InferenceEmbeddingFromStreamDataLoader(args, model, train_dataloader, is_que
     model.eval()
 
     for batch in tqdm(train_dataloader, desc="Inferencing", disable=args.local_rank not in [-1, 0], position=0, leave=True):
-        
         idxs = batch[3].detach().numpy() #[#B]
-
         batch = tuple(t.to(args.device) for t in batch)
 
         with torch.no_grad():
@@ -171,7 +170,6 @@ def InferenceEmbeddingFromStreamDataLoader(args, model, train_dataloader, is_que
         else:
             embedding2id.append(idxs)
             embedding.append(embs)
-
 
     embedding = np.concatenate(embedding, axis=0)
     embedding2id = np.concatenate(embedding2id, axis=0)
@@ -202,7 +200,6 @@ def StreamInferenceDoc(args, model, fn, prefix, f, is_query_inference = True, lo
 
 
 def generate_new_ann(args, output_num, checkpoint_path, preloaded_data, latest_step_num):
-
     model = load_model(args, checkpoint_path)
     pid2offset, offset2pid = load_mapping(args.data_dir, "pid2offset")
 
@@ -310,7 +307,6 @@ def GenerateNegativePassaageID(args, passages, answers, query_embedding2id, pass
 
 
 def validate(passages, answers, closest_docs, query_embedding2id, passage_embedding2id):
-
     tok_opts = {}
     tokenizer = SimpleTokenizer(**tok_opts)
 
@@ -342,156 +338,33 @@ def validate(passages, answers, closest_docs, query_embedding2id, passage_embedd
 
 def get_arguments():
     parser = argparse.ArgumentParser()
-
     # Required parameters
-    parser.add_argument(
-        "--data_dir",
-        default=None,
-        type=str,
-        required=True,
-        help="The input data dir. Should contain the .tsv files (or other data files) for the task.",
-    )
-    parser.add_argument(
-        "--training_dir",
-        default=None,
-        type=str,
-        required=True,
-        help="Training dir, will look for latest checkpoint dir in here",
-    )
-    parser.add_argument(
-        "--init_model_dir",
-        default=None,
-        type=str,
-        required=True,
-        help="Initial model dir, will use this if no checkpoint is found in model_dir",
-    )
-    parser.add_argument(
-        "--last_checkpoint_dir",
-        default="",
-        type=str,
-        help="Last checkpoint used, this is for rerunning this script when some ann data is already generated",
-    )
-    parser.add_argument(
-        "--model_type",
-        default=None,
-        type=str,
-        required=True,
-        help="Model type selected in the list: " + ", ".join(MSMarcoConfigDict.keys()),
-    )
-    parser.add_argument(
-        "--output_dir",
-        default=None,
-        type=str,
-        required=True,
-        help="The output directory where the training data will be written",
-    )
-    parser.add_argument(
-        "--cache_dir",
-        default=None,
-        type=str,
-        required=True,
-        help="The directory where cached data will be written",
-    )
-    parser.add_argument(
-        "--end_output_num",
-        default=-1,
-        type=int,
-        help="Stop after this number of data versions has been generated, default run forever",
-    )
-    parser.add_argument(
-        "--max_seq_length",
-        default=128,
-        type=int,
-        help="The maximum total input sequence length after tokenization. Sequences longer "
-        "than this will be truncated, sequences shorter will be padded.",
-    )
-
-    parser.add_argument(
-        "--max_query_length",
-        default=64,
-        type=int,
-        help="The maximum total input sequence length after tokenization. Sequences longer "
-        "than this will be truncated, sequences shorter will be padded.",
-    )
-
-    parser.add_argument(
-        "--max_doc_character",
-        default= 10000, 
-        type=int,
-        help="used before tokenizer to save tokenizer latency",
-    )
-
-    parser.add_argument(
-        "--per_gpu_eval_batch_size",
-        default=128,
-        type=int,
-        help="The starting output file number",
-    )
-
-    parser.add_argument(
-        "--ann_chunk_factor",
-        default= 5, # for 500k queryes, divided into 100k chunks for each epoch
-        type=int,
-        help="devide training queries into chunks",
-    )
-
-    parser.add_argument(
-        "--topk_training",
-        default= 500,
-        type=int,
-        help="top k from which negative samples are collected",
-    )
-
-    parser.add_argument(
-        "--negative_sample",
-        default= 5,
-        type=int,
-        help="at each resample, how many negative samples per query do I use",
-    )
-
-    parser.add_argument(
-        "--ann_measure_topk_mrr",
-        default = False,
-        action="store_true",
-        help="load scheduler from checkpoint or not",
-    )
-
-    parser.add_argument(
-        "--only_keep_latest_embedding_file",
-        default = False,
-        action="store_true",
-        help="load scheduler from checkpoint or not",
-    )
-
+    parser.add_argument("--data_dir", default=None, type=str, required=True, help="The input data dir. Should contain the .tsv files (or other data files) for the task.",)
+    parser.add_argument("--training_dir", default=None, type=str, required=True, help="Training dir, will look for latest checkpoint dir in here",)
+    parser.add_argument("--init_model_dir", default=None, type=str, required=True, help="Initial model dir, will use this if no checkpoint is found in model_dir",)
+    parser.add_argument("--last_checkpoint_dir", default="", type=str, help="Last checkpoint used, this is for rerunning this script when some ann data is already generated",)
+    parser.add_argument("--model_type", default=None, type=str, required=True, help="Model type selected in the list: " + ", ".join(MSMarcoConfigDict.keys()),)
+    parser.add_argument("--output_dir", default=None, type=str, required=True, help="The output directory where the training data will be written",)
+    parser.add_argument("--cache_dir", default=None, type=str, required=True, help="The directory where cached data will be written",)
+    parser.add_argument("--end_output_num", default=-1, type=int, help="Stop after this number of data versions has been generated, default run forever",)
+    parser.add_argument("--max_seq_length", default=128, type=int, help="The maximum total input sequence length after tokenization. \
+                                                            Sequences longer than this will be truncated, sequences shorter will be padded.",)
+    parser.add_argument("--max_query_length", default=64, type=int, help="The maximum total input sequence length after tokenization. \
+                                                            Sequences longer than this will be truncated, sequences shorter will be padded.",)
+    parser.add_argument("--max_doc_character", default= 10000, type=int, help="used before tokenizer to save tokenizer latency",)
+    parser.add_argument("--per_gpu_eval_batch_size", default=128, type=int, help="The starting output file number",)
+    parser.add_argument("--ann_chunk_factor", default= 5, help="devide training queries into chunks",) # for 500k queryes, divided into 100k chunks for each epoch type=int,
+    parser.add_argument("--topk_training", default= 500, type=int, help="top k from which negative samples are collected",)
+    parser.add_argument("--negative_sample", default= 5, type=int, help="at each resample, how many negative samples per query do I use",)
+    parser.add_argument("--ann_measure_topk_mrr", default = False, action="store_true", help="load scheduler from checkpoint or not",)
+    parser.add_argument("--only_keep_latest_embedding_file", default = False, action="store_true", help="load scheduler from checkpoint or not",)
     parser.add_argument("--no_cuda", action="store_true", help="Avoid using CUDA when available")
     parser.add_argument("--local_rank", type=int, default=-1, help="For distributed training: local_rank")
     parser.add_argument("--server_ip", type=str, default="", help="For distant debugging.")
     parser.add_argument("--server_port", type=str, default="", help="For distant debugging.")
-
-    parser.add_argument(
-        "--passage_path",
-        default=None,
-        type=str,
-        required=True,
-        help="passage_path",
-    )
-
-    parser.add_argument(
-        "--test_qa_path",
-        default=None,
-        type=str,
-        required=True,
-        help="test_qa_path",
-    )
-
-    parser.add_argument(
-        "--trivia_test_qa_path",
-        default=None,
-        type=str,
-        required=True,
-        help="trivia_test_qa_path",
-    )
-
+    parser.add_argument("--passage_path", default=None, type=str, required=True, help="passage_path",)
+    parser.add_argument("--test_qa_path", default=None, type=str, required=True, help="test_qa_path",)
+    parser.add_argument("--trivia_test_qa_path", default=None, type=str, required=True, help="trivia_test_qa_path",)
     args = parser.parse_args()
 
     return args
