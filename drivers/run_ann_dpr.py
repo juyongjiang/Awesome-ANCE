@@ -79,8 +79,10 @@ def train(args, model, tokenizer, query_cache, passage_cache):
 
     # Distributed training (should be after apex fp16 initialization)
     if args.local_rank != -1:
-        model = torch.nn.parallel.DistributedDataParallel(
-            model, device_ids=[args.local_rank], output_device=args.local_rank, find_unused_parameters=True,
+        model = torch.nn.parallel.DistributedDataParallel(model, 
+                                                          device_ids=[args.local_rank], 
+                                                          output_device=args.local_rank, 
+                                                          find_unused_parameters=True,
         )
 
     # Train!
@@ -107,9 +109,7 @@ def train(args, model, tokenizer, query_cache, passage_cache):
     step = 0
     iter_count = 0
 
-    scheduler = get_linear_schedule_with_warmup(
-        optimizer, num_warmup_steps=args.warmup_steps, num_training_steps= args.max_steps
-    )
+    scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=args.warmup_steps, num_training_steps= args.max_steps)
 
     global_step = 0
     if args.model_name_or_path != "bert-base-uncased":
@@ -117,7 +117,6 @@ def train(args, model, tokenizer, query_cache, passage_cache):
         global_step = _load_saved_state(model, optimizer, scheduler, saved_state)
         logger.info("  Continuing training from checkpoint, will skip to saved global_step")
         logger.info("  Continuing training from global step %d", global_step)
-
 
         nq_dev_nll_loss, nq_correct_ratio = evaluate_dev(args, model, passage_cache)
         dev_nll_loss_trivia, correct_ratio_trivia = evaluate_dev(args, model, passage_cache, "-trivia")
@@ -128,9 +127,7 @@ def train(args, model, tokenizer, query_cache, passage_cache):
             tb_writer.add_scalar("dev_nll_loss/correct_ratio_trivia", correct_ratio_trivia, global_step)
 
     while global_step < args.max_steps:
-
         if step % args.gradient_accumulation_steps == 0 and global_step % args.logging_steps == 0:
-
             if args.num_epoch == 0:
                 # check if new ann training data is availabe
                 ann_no, ann_path, ndcg_json = get_latest_ann_data(args.ann_dir)
@@ -264,7 +261,6 @@ def train(args, model, tokenizer, query_cache, passage_cache):
 
 
 def evaluate_dev(args, model, passage_cache, source=""):
-
     dev_query_collection_path = os.path.join(args.data_dir, "dev-query{}".format(source))
     dev_query_cache = EmbeddingCache(dev_query_collection_path)
 
@@ -296,7 +292,8 @@ def evaluate_dev(args, model, passage_cache, source=""):
     total_loss = total_loss / batches
     total_samples = batches * args.train_batch_size * torch.distributed.get_world_size()
     correct_ratio = float(total_correct_predictions / total_samples)
-    logger.info('NLL Validation: loss = %f. correct prediction ratio  %d/%d ~  %f', total_loss,
+    logger.info('NLL Validation: loss = %f. correct prediction ratio  %d/%d ~  %f', 
+                total_loss,
                 total_correct_predictions,
                 total_samples,
                 correct_ratio
@@ -321,8 +318,7 @@ def triplet_fwd_pass(args, model, batch):
     return loss
 
 
-def do_biencoder_fwd_pass(args, model, batch) -> (
-        torch.Tensor, int):
+def do_biencoder_fwd_pass(args, model, batch) -> (torch.Tensor, int):
 
     batch = tuple(t.to(args.device) for t in batch)
     inputs = {"query_ids": batch[0][::2].long(), "attention_mask_q": batch[1][::2].long(), 
@@ -333,9 +329,7 @@ def do_biencoder_fwd_pass(args, model, batch) -> (
     q_vector_to_send = torch.empty_like(local_q_vector).cpu().copy_(local_q_vector).detach_()
     ctx_vector_to_send = torch.empty_like(local_ctx_vectors).cpu().copy_(local_ctx_vectors).detach_()
 
-    global_question_ctx_vectors = all_gather_list(
-        [q_vector_to_send, ctx_vector_to_send],
-        max_size=150000)
+    global_question_ctx_vectors = all_gather_list([q_vector_to_send, ctx_vector_to_send], max_size=150000)
 
     global_q_vector = []
     global_ctxs_vector = []
@@ -359,8 +353,7 @@ def do_biencoder_fwd_pass(args, model, batch) -> (
         scores = scores.view(q_num, -1)
     softmax_scores = F.log_softmax(scores, dim=1)
     positive_idx_per_question = [i*2 for i in range(q_num)]
-    loss = F.nll_loss(softmax_scores, torch.tensor(positive_idx_per_question).to(softmax_scores.device),
-                      reduction='mean')
+    loss = F.nll_loss(softmax_scores, torch.tensor(positive_idx_per_question).to(softmax_scores.device), reduction='mean')
     max_score, max_idxs = torch.max(softmax_scores, 1)
     correct_predictions_count = (max_idxs == torch.tensor(positive_idx_per_question).to(max_idxs.device)).sum()
 
@@ -385,7 +378,8 @@ def _save_checkpoint(args, model, optimizer, scheduler, step: int) -> str:
                             optimizer.state_dict(),
                             scheduler.state_dict(),
                             offset,
-                            epoch, meta_params
+                            epoch, 
+                            meta_params
                             )
     torch.save(state._asdict(), cp)
     logger.info('Saved checkpoint at %s', cp)
@@ -405,165 +399,47 @@ def _load_saved_state(model, optimizer, scheduler, saved_state: CheckpointState)
 
 def get_arguments():
     parser = argparse.ArgumentParser()
-
     # Required parameters
-    parser.add_argument(
-        "--data_dir",
-        default=None,
-        type=str,
-        required=True,
-        help="The input data dir. Should contain the cached passage and query files",
-    )
-    parser.add_argument(
-        "--ann_dir",
-        default=None,
-        type=str,
-        required=True,
-        help="The ann training data dir. Should contain the output of ann data generation job",
-    )
-    parser.add_argument(
-        "--model_type",
-        default=None,
-        type=str,
-        required=True,
-        help="Model type selected in the list: " + ", ".join(MSMarcoConfigDict.keys()),
-    )
-    parser.add_argument(
-        "--model_name_or_path",
-        default=None,
-        type=str,
-        required=True,
-        help="Path to pre-trained model or shortcut name selected in the list: " + ", ".join(ALL_MODELS),
-    )
-    parser.add_argument(
-        "--task_name",
-        default=None,
-        type=str,
-        required=True,
-        help="The name of the task to train selected in the list: " + ", ".join(processors.keys()),
-    )
-    parser.add_argument(
-        "--output_dir",
-        default=None,
-        type=str,
-        required=True,
-        help="The output directory where the model predictions and checkpoints will be written.",
-    )
-
-    parser.add_argument(
-        "--num_epoch",
-        default=0,
-        type=int,
-        help="Number of epoch to train, if specified will use training data instead of ann",
-    )
-
+    parser.add_argument("--data_dir", default=None, type=str, required=True, help="The input data dir. Should contain the cached passage and query files",)
+    parser.add_argument("--ann_dir", default=None, type=str, required=True, help="The ann training data dir. Should contain the output of ann data generation job",)
+    parser.add_argument("--model_type", default=None, type=str, required=True, help="Model type selected in the list: " + ", ".join(MSMarcoConfigDict.keys()),)
+    parser.add_argument("--model_name_or_path", default=None, type=str, required=True, help="Path to pre-trained model or shortcut name selected in the list: " + ", ".join(ALL_MODELS),)
+    parser.add_argument("--task_name", default=None, type=str, required=True, help="The name of the task to train selected in the list: " + ", ".join(processors.keys()),)
+    parser.add_argument("--output_dir", default=None, type=str, required=True, help="The output directory where the model predictions and checkpoints will be written.",)
+    parser.add_argument("--num_epoch", default=0, type=int, help="Number of epoch to train, if specified will use training data instead of ann",)
     # Other parameters
-    parser.add_argument(
-        "--config_name", default="", type=str, help="Pretrained config name or path if not the same as model_name",
-    )
-    parser.add_argument(
-        "--tokenizer_name",
-        default="",
-        type=str,
-        help="Pretrained tokenizer name or path if not the same as model_name",
-    )
-    parser.add_argument(
-        "--cache_dir",
-        default="",
-        type=str,
-        help="Where do you want to store the pre-trained models downloaded from s3",
-    )
-    parser.add_argument(
-        "--max_seq_length",
-        default=128,
-        type=int,
-        help="The maximum total input sequence length after tokenization. Sequences longer "
-        "than this will be truncated, sequences shorter will be padded.",
-    )
-
-    parser.add_argument(
-        "--max_query_length",
-        default=64,
-        type=int,
-        help="The maximum total input sequence length after tokenization. Sequences longer "
-        "than this will be truncated, sequences shorter will be padded.",
-    )
-
+    parser.add_argument("--config_name", default="", type=str, help="Pretrained config name or path if not the same as model_name",)
+    parser.add_argument("--tokenizer_name", default="", type=str, help="Pretrained tokenizer name or path if not the same as model_name",)
+    parser.add_argument("--cache_dir", default="", type=str, help="Where do you want to store the pre-trained models downloaded from s3",)
+    parser.add_argument("--max_seq_length", default=128, type=int, help="The maximum total input sequence length after tokenization. \
+                                                            Sequences longer than this will be truncated, sequences shorter will be padded.",)
+    parser.add_argument("--max_query_length", default=64, type=int, help="The maximum total input sequence length after tokenization. \
+                                                                Sequences longer than this will be truncated, sequences shorter will be padded.",)
     parser.add_argument("--triplet", default = False, action="store_true", help="Whether to run training.")
-    parser.add_argument(
-        "--log_dir",
-        default=None,
-        type=str,
-        help="Tensorboard log dir",
-    )
-
-    parser.add_argument(
-        "--optimizer",
-        default="adamW",
-        type=str,
-        help="Optimizer - lamb or adamW",
-    )
-
-    parser.add_argument(
-        "--per_gpu_train_batch_size", default=8, type=int, help="Batch size per GPU/CPU for training.",
-    )
-    parser.add_argument(
-        "--gradient_accumulation_steps",
-        type=int,
-        default=1,
-        help="Number of updates steps to accumulate before performing a backward/update pass.",
-    )
+    parser.add_argument("--log_dir", default=None, type=str, help="Tensorboard log dir",)
+    parser.add_argument("--optimizer", default="adamW", type=str, help="Optimizer - lamb or adamW",)
+    parser.add_argument("--per_gpu_train_batch_size", default=8, type=int, help="Batch size per GPU/CPU for training.",)
+    parser.add_argument("--gradient_accumulation_steps", type=int, default=1, help="Number of updates steps to accumulate before performing a backward/update pass.",)
     parser.add_argument("--learning_rate", default=5e-5, type=float, help="The initial learning rate for Adam.")
     parser.add_argument("--weight_decay", default=0.0, type=float, help="Weight decay if we apply some.")
     parser.add_argument("--adam_epsilon", default=1e-8, type=float, help="Epsilon for Adam optimizer.")
     parser.add_argument("--max_grad_norm", default=2.0, type=float, help="Max gradient norm.")
-    parser.add_argument(
-        "--max_steps",
-        default=300000,
-        type=int,
-        help="If > 0: set total number of training steps to perform",
-    )
+    parser.add_argument("--max_steps", default=300000, type=int, help="If > 0: set total number of training steps to perform",)
     parser.add_argument("--warmup_steps", default=0, type=int, help="Linear warmup over warmup_steps.")
     parser.add_argument("--logging_steps", type=int, default=500, help="Log every X updates steps.")
     parser.add_argument("--save_steps", type=int, default=500, help="Save checkpoint every X updates steps.")
-
     parser.add_argument("--no_cuda", action="store_true", help="Avoid using CUDA when available")
     parser.add_argument("--seed", type=int, default=42, help="random seed for initialization")
-
-    parser.add_argument(
-        "--fp16",
-        action="store_true",
-        help="Whether to use 16-bit (mixed) precision (through NVIDIA apex) instead of 32-bit",
-    )
-    parser.add_argument(
-        "--fp16_opt_level",
-        type=str,
-        default="O1",
-        help="For fp16: Apex AMP optimization level selected in ['O0', 'O1', 'O2', and 'O3']."
-        "See details at https://nvidia.github.io/apex/amp.html",
-    )
-
+    parser.add_argument("--fp16", action="store_true", help="Whether to use 16-bit (mixed) precision (through NVIDIA apex) instead of 32-bit",)
+    parser.add_argument("--fp16_opt_level", type=str, default="O1", help="For fp16: Apex AMP optimization level selected in ['O0', 'O1', 'O2', and 'O3']. \
+                                                                    See details at https://nvidia.github.io/apex/amp.html",)
     # ----------------- ANN HyperParam ------------------
-
-    parser.add_argument(
-        "--load_optimizer_scheduler",
-        default = False,
-        action="store_true",
-        help="load scheduler from checkpoint or not",
-    )
-
-    parser.add_argument(
-        "--single_warmup",
-        default = True,
-        action="store_true",
-        help="use single or re-warmup",
-    )
-
+    parser.add_argument("--load_optimizer_scheduler", default = False, action="store_true", help="load scheduler from checkpoint or not",)
+    parser.add_argument("--single_warmup", default = True, action="store_true", help="use single or re-warmup",)
     # ----------------- End of Doc Ranking HyperParam ------------------
     parser.add_argument("--local_rank", type=int, default=-1, help="For distributed training: local_rank")
     parser.add_argument("--server_ip", type=str, default="", help="For distant debugging.")
     parser.add_argument("--server_port", type=str, default="", help="For distant debugging.")
-
     args = parser.parse_args()
 
     return args
@@ -616,7 +492,6 @@ def load_model(args):
     label_list = ["0", "1"]
     num_labels = len(label_list)
 
-
     # store args
     if args.local_rank != -1:
         args.world_size = torch.distributed.get_world_size()
@@ -628,11 +503,7 @@ def load_model(args):
 
     args.model_type = args.model_type.lower()
     configObj = MSMarcoConfigDict[args.model_type]
-    tokenizer = configObj.tokenizer_class.from_pretrained(
-        "bert-base-uncased",
-        do_lower_case=True,
-        cache_dir=args.cache_dir if args.cache_dir else None,
-    )
+    tokenizer = configObj.tokenizer_class.from_pretrained("bert-base-uncased", do_lower_case=True, cache_dir=args.cache_dir if args.cache_dir else None,)
 
     if is_first_worker():
         # Create output directory if needed

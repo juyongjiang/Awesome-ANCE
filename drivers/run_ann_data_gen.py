@@ -336,18 +336,12 @@ def GenerateNegativePassaageID(args, query_embedding2id, passage_embedding2id, t
             neg_cnt += 1
 
     if SelectTopK:
-        print("Rank:" + str(args.rank) +
-              " --- ANN MRR:" + str(mrr / num_queries))
+        print("Rank:" + str(args.rank) + " --- ANN MRR:" + str(mrr / num_queries))
 
     return query_negative_passage
 
 
-def EvalDevQuery(
-        args,
-        query_embedding2id,
-        passage_embedding2id,
-        dev_query_positive_id,
-        I_nearest_neighbor):
+def EvalDevQuery(args, query_embedding2id, passage_embedding2id, dev_query_positive_id, I_nearest_neighbor):
     # [qid][docid] = docscore, here we use -rank as score, so the higher the rank (1 > 2), the higher the score (-1 > -2)
     prediction = {}
 
@@ -369,8 +363,7 @@ def EvalDevQuery(
                 seen_pid.add(pred_pid)
 
     # use out of the box evaluation script
-    evaluator = pytrec_eval.RelevanceEvaluator(
-        convert_to_string_id(dev_query_positive_id), {'map_cut', 'ndcg_cut'})
+    evaluator = pytrec_eval.RelevanceEvaluator(convert_to_string_id(dev_query_positive_id), {'map_cut', 'ndcg_cut'})
 
     eval_query_cnt = 0
     result = evaluator.evaluate(convert_to_string_id(prediction))
@@ -388,186 +381,33 @@ def EvalDevQuery(
 
 def get_arguments():
     parser = argparse.ArgumentParser()
-
     # Required parameters
-    parser.add_argument(
-        "--data_dir",
-        default=None,
-        type=str,
-        required=True,
-        help="The input data dir. Should contain the .tsv files (or other data files) for the task.",
-    )
-
-    parser.add_argument(
-        "--training_dir",
-        default=None,
-        type=str,
-        required=True,
-        help="Training dir, will look for latest checkpoint dir in here",
-    )
-
-    parser.add_argument(
-        "--init_model_dir",
-        default=None,
-        type=str,
-        required=True,
-        help="Initial model dir, will use this if no checkpoint is found in model_dir",
-    )
-
-    parser.add_argument(
-        "--last_checkpoint_dir",
-        default="",
-        type=str,
-        help="Last checkpoint used, this is for rerunning this script when some ann data is already generated",
-    )
-
-    parser.add_argument(
-        "--model_type",
-        default=None,
-        type=str,
-        required=True,
-        help="Model type selected in the list: " +
-        ", ".join(
-            MSMarcoConfigDict.keys()),
-    )
-
-    parser.add_argument(
-        "--output_dir",
-        default=None,
-        type=str,
-        required=True,
-        help="The output directory where the training data will be written",
-    )
-
-    parser.add_argument(
-        "--cache_dir",
-        default=None,
-        type=str,
-        required=True,
-        help="The directory where cached data will be written",
-    )
-
-    parser.add_argument(
-        "--end_output_num",
-        default=-
-        1,
-        type=int,
-        help="Stop after this number of data versions has been generated, default run forever",
-    )
-
-    parser.add_argument(
-        "--max_seq_length",
-        default=128,
-        type=int,
-        help="The maximum total input sequence length after tokenization. Sequences longer "
-        "than this will be truncated, sequences shorter will be padded.",
-    )
-
-    parser.add_argument(
-        "--max_query_length",
-        default=64,
-        type=int,
-        help="The maximum total input sequence length after tokenization. Sequences longer "
-        "than this will be truncated, sequences shorter will be padded.",
-    )
-
-    parser.add_argument(
-        "--max_doc_character",
-        default=10000,
-        type=int,
-        help="used before tokenizer to save tokenizer latency",
-    )
-
-    parser.add_argument(
-        "--per_gpu_eval_batch_size",
-        default=128,
-        type=int,
-        help="The starting output file number",
-    )
-
-    parser.add_argument(
-        "--ann_chunk_factor",
-        default=5,  # for 500k queryes, divided into 100k chunks for each epoch
-        type=int,
-        help="devide training queries into chunks",
-    )
-
-    parser.add_argument(
-        "--topk_training",
-        default=500,
-        type=int,
-        help="top k from which negative samples are collected",
-    )
-
-    parser.add_argument(
-        "--negative_sample",
-        default=5,
-        type=int,
-        help="at each resample, how many negative samples per query do I use",
-    )
-
-    parser.add_argument(
-        "--ann_measure_topk_mrr",
-        default=False,
-        action="store_true",
-        help="load scheduler from checkpoint or not",
-    )
-
-    parser.add_argument(
-        "--only_keep_latest_embedding_file",
-        default=False,
-        action="store_true",
-        help="load scheduler from checkpoint or not",
-    )
-
-    parser.add_argument(
-        "--no_cuda",
-        action="store_true",
-        help="Avoid using CUDA when available",
-    )
-    
-    parser.add_argument(
-        "--local_rank", 
-        type=int, 
-        default=-1, 
-        help="For distributed training: local_rank",
-    )
-    
-    parser.add_argument(
-        "--server_ip",
-        type=str,
-        default="",
-        help="For distant debugging.",
-    )
-
-    parser.add_argument(
-        "--server_port",
-        type=str,
-        default="",
-        help="For distant debugging.",
-    )
-    
-    parser.add_argument(
-        "--inference",
-        default=False,
-        action="store_true",
-        help="only do inference if specify",
-    )
-
-    parser.add_argument(
-        "--config_name",
-        default="",
-        type=str,
-        help="Pretrained config name or path if not the same as model_name",
-    )
-
-    parser.add_argument(
-        "--tokenizer_name",
-        default="",
-        type=str,
-        help="Pretrained tokenizer name or path if not the same as model_name",
-    )
-
+    parser.add_argument("--data_dir", default=None, type=str, required=True, help="The input data dir. Should contain the .tsv files (or other data files) for the task.",)
+    parser.add_argument("--training_dir", default=None, type=str, required=True, help="Training dir, will look for latest checkpoint dir in here",)
+    parser.add_argument("--init_model_dir", default=None, type=str, required=True, help="Initial model dir, will use this if no checkpoint is found in model_dir",)
+    parser.add_argument("--last_checkpoint_dir", default="", type=str, help="Last checkpoint used, this is for rerunning this script when some ann data is already generated",)
+    parser.add_argument("--model_type", default=None, type=str, required=True, help="Model type selected in the list: " + ", ".join(MSMarcoConfigDict.keys()),)
+    parser.add_argument("--output_dir", default=None, type=str, required=True, help="The output directory where the training data will be written",)
+    parser.add_argument("--cache_dir", default=None, type=str, required=True, help="The directory where cached data will be written",)
+    parser.add_argument("--end_output_num", default=-1, type=int, help="Stop after this number of data versions has been generated, default run forever",)
+    parser.add_argument("--max_seq_length", default=128, type=int, help="The maximum total input sequence length after tokenization. \
+                                                        Sequences longer than this will be truncated, sequences shorter will be padded.",)
+    parser.add_argument("--max_query_length", default=64, type=int, help="The maximum total input sequence length after tokenization. \
+                                              Sequences longer than this will be truncated, sequences shorter will be padded.",)
+    parser.add_argument("--max_doc_character", default=10000, type=int, help="used before tokenizer to save tokenizer latency",)
+    parser.add_argument("--per_gpu_eval_batch_size", default=128, type=int, help="The starting output file number",)
+    parser.add_argument("--ann_chunk_factor", default=5, type=int, help="devide training queries into chunks",) # for 500k queryes, divided into 100k chunks for each epoch
+    parser.add_argument("--topk_training", default=500, type=int, help="top k from which negative samples are collected",)
+    parser.add_argument("--negative_sample", default=5, type=int, help="at each resample, how many negative samples per query do I use",)
+    parser.add_argument("--ann_measure_topk_mrr", default=False, action="store_true", help="load scheduler from checkpoint or not",)
+    parser.add_argument("--only_keep_latest_embedding_file", default=False, action="store_true", help="load scheduler from checkpoint or not",)
+    parser.add_argument("--no_cuda", action="store_true", help="Avoid using CUDA when available",)
+    parser.add_argument("--local_rank", type=int, default=-1, help="For distributed training: local_rank",)
+    parser.add_argument("--server_ip", type=str, default="", help="For distant debugging.",)
+    parser.add_argument("--server_port", type=str, default="", help="For distant debugging.",)
+    parser.add_argument("--inference", default=False, action="store_true", help="only do inference if specify",)
+    parser.add_argument("--config_name", default="", type=str, help="Pretrained config name or path if not the same as model_name",)
+    parser.add_argument("--tokenizer_name", default="", type=str, help="Pretrained tokenizer name or path if not the same as model_name",)
     args = parser.parse_args()
 
     return args
@@ -576,8 +416,7 @@ def get_arguments():
 def set_env(args):
     # Setup CUDA, GPU & distributed training
     if args.local_rank == -1 or args.no_cuda:
-        device = torch.device(
-            "cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
+        device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
         args.n_gpu = torch.cuda.device_count()
     else:  # Initializes the distributed backend which will take care of sychronizing nodes/GPUs
         torch.cuda.set_device(args.local_rank)
@@ -632,13 +471,7 @@ def ann_data_gen(args):
         else:
             logger.info("start generate ann data number %d", output_num)
             logger.info("next checkpoint at " + next_checkpoint)
-            generate_new_ann(
-                args,
-                output_num,
-                next_checkpoint,
-                training_positive_id,
-                dev_positive_id,
-                latest_step_num)
+            generate_new_ann(args, output_num, next_checkpoint, training_positive_id, dev_positive_id, latest_step_num)
             if args.inference:
                 break
             logger.info("finished generating ann data number %d", output_num)
@@ -652,7 +485,6 @@ def main():
     args = get_arguments()
     set_env(args)
     ann_data_gen(args)
-
 
 if __name__ == "__main__":
     main()
