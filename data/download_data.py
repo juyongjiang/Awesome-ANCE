@@ -530,55 +530,56 @@ def download(data_name: str, resource_map: dict, resource_key: str, out_dir: str
     if resource_key not in resource_map:
         # match by prefix
         resources = [k for k in resource_map.keys() if k.startswith(resource_key)]
+        print("Match by prefix resources: ", resources)
         if resources:
             for key in resources:
-                download(key, out_dir)
+                download(data_name, resource_map, key, out_dir)
         else:
             logger.info("no resources found for specified key")
             raise ValueError("Error: No resources found for specified key!")
+    else:
+        download_info = resource_map[resource_key]
+        s3_url = download_info["s3_url"]
+        zip_format = ".gz" if not download_info.get("zip_format", None) else ".tar.gz"
 
-    download_info = resource_map[resource_key]
-    s3_url = download_info["s3_url"]
-    zip_format = ".gz" if not download_info.get("zip_format", None) else ".tar.gz"
-
-    # download datasets
-    save_root_dir = None
-    data_files = []
-    if isinstance(s3_url, list):
-        for i, url in enumerate(s3_url):
+        # download datasets
+        save_root_dir = None
+        data_files = []
+        if isinstance(s3_url, list):
+            for i, url in enumerate(s3_url):
+                save_root_dir, local_file = download_resource(
+                    data_name,
+                    url, 
+                    download_info["original_ext"],
+                    download_info["compressed"],
+                    "{}_{}".format(resource_key, i),
+                    out_dir,
+                    zip_format,
+                )
+                data_files.append(local_file)
+        else:
             save_root_dir, local_file = download_resource(
-                data_name,
-                url, 
+                data_name, 
+                s3_url,
                 download_info["original_ext"],
                 download_info["compressed"],
-                "{}_{}".format(resource_key, i),
+                resource_key,
                 out_dir,
                 zip_format,
             )
             data_files.append(local_file)
-    else:
-        save_root_dir, local_file = download_resource(
-            data_name, 
-            s3_url,
-            download_info["original_ext"],
-            download_info["compressed"],
-            resource_key,
-            out_dir,
-            zip_format,
-        )
-        data_files.append(local_file)
 
-    # download LICENSE and README files
-    license_files = download_info.get("license_files", None)
-    if license_files:
-        download_file(license_files[0], save_root_dir, "LICENSE")
-        download_file(license_files[1], save_root_dir, "README")
-    
-    qrels_docs = download_info.get("2019qrels_docs", None)
-    if qrels_docs:
-        download_file(qrels_docs, save_root_dir, "2019qrels-docs.txt")
+        # download LICENSE and README files
+        license_files = download_info.get("license_files", None)
+        if license_files:
+            download_file(license_files[0], save_root_dir, "LICENSE")
+            download_file(license_files[1], save_root_dir, "README")
+        
+        qrels_docs = download_info.get("2019qrels_docs", None)
+        if qrels_docs:
+            download_file(qrels_docs, save_root_dir, "2019qrels-docs.txt")
 
-    return data_files
+        return data_files
 
 def main():
     parser = argparse.ArgumentParser()
@@ -592,15 +593,17 @@ def main():
             logger.info("data name %s", data_name)
             resource = list(MSMARCO_MAP.keys())
             logger.info("resource name %s", *resource)
+            print("Download resources: ", resource)
             for resource_key in resource:
                 download(data_name, RESOURCE_MAP, resource_key, args.output_dir)
         elif data_name == "NQ_TQA":
             RESOURCE_MAP = NQ_TQA_MAP
             logger.info("data name %s", data_name)
-            resource = ["data.wikipedia_split.psgs_w100", "data.retriever.nq", "data.retriever.trivia", 
-                            "data.retriever.qas.nq", "data.retriever.qas.trivia", 
-                            "checkpoint.retriever.multiset.bert-base-encoder"]
+            resource = ["data.wikipedia_split.psgs_w100", "data.retriever.nq", "data.retriever.trivia", \
+                        "data.retriever.qas.nq", "data.retriever.qas.trivia", \
+                        "checkpoint.retriever.multiset.bert-base-encoder"]
             logger.info("resource name %s", *resource)
+            print("Download resources: ", resource)
             for resource_key in resource:
                 download(data_name, RESOURCE_MAP, resource_key, args.output_dir)
         else:

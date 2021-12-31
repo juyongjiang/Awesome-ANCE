@@ -7,6 +7,8 @@ runs/
 # Dataset
 data/MSMARCO/
 data/NQ_TQA/
+*raw_data/
+data/dataset/
 # C extensions
 *.so
 

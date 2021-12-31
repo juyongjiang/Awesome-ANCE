@@ -280,56 +280,6 @@ def train(args, model, tokenizer, query_cache, passage_cache):
 
     return global_step
 
-
-def get_arguments():
-    parser = argparse.ArgumentParser()
-    # Required parameters
-    parser.add_argument("--data_dir", default=None, type=str, required=True, help="The input data dir. Should contain the cached passage and query files",)
-    parser.add_argument("--ann_dir", default=None, type=str, required=True, help="The ann training data dir. Should contain the output of ann data generation job",)
-    parser.add_argument("--model_type", default=None, type=str, required=True, help="Model type selected in the list: " + ", ".join(MSMarcoConfigDict.keys()),)
-    parser.add_argument("--model_name_or_path", default=None, type=str, required=True, help="Path to pre-trained model or shortcut name selected in the list: " + ", ".join(ALL_MODELS),)
-    parser.add_argument("--task_name", default=None, type=str, required=True, help="The name of the task to train selected in the list: " + ", ".join(processors.keys()),)
-    parser.add_argument("--output_dir", default=None, type=str, required=True, help="The output directory where the model predictions and checkpoints will be written.",)
-    # Other parameters
-    parser.add_argument("--config_name", default="", type=str, help="Pretrained config name or path if not the same as model_name",)
-    parser.add_argument("--tokenizer_name", default="", type=str, help="Pretrained tokenizer name or path if not the same as model_name",)
-    parser.add_argument("--cache_dir", default="", type=str, help="Where do you want to store the pre-trained models downloaded from s3",)
-    parser.add_argument("--max_seq_length", default=128, type=int, help="The maximum total input sequence length after tokenization. \
-                                            Sequences longer than this will be truncated, sequences shorter will be padded.",)
-    parser.add_argument("--max_query_length", default=64, type=int, help="The maximum total input sequence length after tokenization. \
-                                            Sequences longer than this will be truncated, sequences shorter will be padded.",)
-    parser.add_argument("--triplet", default=False, action="store_true", help="Whether to run training.",)
-    parser.add_argument("--do_lower_case", action="store_true", help="Set this flag if you are using an uncased model.",)
-    parser.add_argument("--log_dir", default=None, type=str, help="Tensorboard log dir",)
-    parser.add_argument("--optimizer", default="lamb", type=str, help="Optimizer - lamb or adamW",)
-    parser.add_argument("--per_gpu_train_batch_size", default=8, type=int, help="Batch size per GPU/CPU for training.",)
-    parser.add_argument("--gradient_accumulation_steps", type=int, default=1, help="Number of updates steps to accumulate before performing a backward/update pass.",)
-    parser.add_argument("--learning_rate", default=5e-5, type=float, help="The initial learning rate for Adam.",)
-    parser.add_argument("--weight_decay", default=0.0, type=float, help="Weight decay if we apply some.",)
-    parser.add_argument("--adam_epsilon", default=1e-8, type=float, help="Epsilon for Adam optimizer.",)
-    parser.add_argument("--max_grad_norm", default=1.0, type=float, help="Max gradient norm.",)
-    parser.add_argument("--max_steps", default=1000000, type=int, help="If > 0: set total number of training steps to perform",)
-    parser.add_argument("--warmup_steps", default=0, type=int, help="Linear warmup over warmup_steps.",)
-    parser.add_argument("--logging_steps", type=int, default=500, help="Log every X updates steps.",)
-    parser.add_argument("--save_steps", type=int, default=500, help="Save checkpoint every X updates steps.",)
-    parser.add_argument("--no_cuda", action="store_true", help="Avoid using CUDA when available",)
-    parser.add_argument("--seed", type=int, default=42, help="random seed for initialization",)
-    parser.add_argument("--fp16", action="store_true", help="Whether to use 16-bit (mixed) precision (through NVIDIA apex) instead of 32-bit",)
-    parser.add_argument("--fp16_opt_level", type=str, default="O1", help="For fp16: Apex AMP optimization level selected in ['O0', 'O1', 'O2', \
-                                                                          and 'O3']. See details at https://nvidia.github.io/apex/amp.html",)
-    # ----------------- ANN HyperParam ------------------
-    parser.add_argument("--load_optimizer_scheduler", default=False, action="store_true", help="load scheduler from checkpoint or not",)
-    parser.add_argument("--single_warmup", default=False, action="store_true", help="use single or re-warmup",)
-    # ----------------- End of Doc Ranking HyperParam ------------------
-    parser.add_argument("--local_rank", type=int, default=-1, help="For distributed training: local_rank",)
-    parser.add_argument("--server_ip", type=str, default="", help="For distant debugging.",)
-    parser.add_argument("--server_port", type=str, default="", help="For distant debugging.",)
-
-    args = parser.parse_args()
-
-    return args
-
-
 def set_env(args):
     # Setup distant debugging if needed
     if args.server_ip and args.server_port:
@@ -441,7 +391,52 @@ def save_checkpoint(args, model, tokenizer):
 
 
 def main():
-    args = get_arguments()
+    parser = argparse.ArgumentParser()
+    # Required parameters
+    parser.add_argument("--data_dir", default=None, type=str, required=True, help="The input data dir. Should contain the cached passage and query files",)
+    parser.add_argument("--ann_dir", default=None, type=str, required=True, help="The ann training data dir. Should contain the output of ann data generation job",)
+    parser.add_argument("--model_type", default=None, type=str, required=True, help="Model type selected in the list: " + ", ".join(MSMarcoConfigDict.keys()),)
+    parser.add_argument("--model_name_or_path", default=None, type=str, required=True, help="Path to pre-trained model or shortcut name selected in the list: " + ", ".join(ALL_MODELS),)
+    parser.add_argument("--task_name", default=None, type=str, required=True, help="The name of the task to train selected in the list: " + ", ".join(processors.keys()),)
+    parser.add_argument("--output_dir", default=None, type=str, required=True, help="The output directory where the model predictions and checkpoints will be written.",)
+    # Other parameters
+    parser.add_argument("--config_name", default="", type=str, help="Pretrained config name or path if not the same as model_name",)
+    parser.add_argument("--tokenizer_name", default="", type=str, help="Pretrained tokenizer name or path if not the same as model_name",)
+    parser.add_argument("--cache_dir", default="", type=str, help="Where do you want to store the pre-trained models downloaded from s3",)
+    parser.add_argument("--max_seq_length", default=128, type=int, help="The maximum total input sequence length after tokenization. \
+                                            Sequences longer than this will be truncated, sequences shorter will be padded.",)
+    parser.add_argument("--max_query_length", default=64, type=int, help="The maximum total input sequence length after tokenization. \
+                                            Sequences longer than this will be truncated, sequences shorter will be padded.",)
+    parser.add_argument("--triplet", default=False, action="store_true", help="Whether to run training.",)
+    parser.add_argument("--do_lower_case", action="store_true", help="Set this flag if you are using an uncased model.",)
+    parser.add_argument("--log_dir", default=None, type=str, help="Tensorboard log dir",)
+    parser.add_argument("--optimizer", default="lamb", type=str, help="Optimizer - lamb or adamW",)
+    parser.add_argument("--per_gpu_train_batch_size", default=8, type=int, help="Batch size per GPU/CPU for training.",)
+    parser.add_argument("--gradient_accumulation_steps", type=int, default=1, help="Number of updates steps to accumulate before performing a backward/update pass.",)
+    parser.add_argument("--learning_rate", default=5e-5, type=float, help="The initial learning rate for Adam.",)
+    parser.add_argument("--weight_decay", default=0.0, type=float, help="Weight decay if we apply some.",)
+    parser.add_argument("--adam_epsilon", default=1e-8, type=float, help="Epsilon for Adam optimizer.",)
+    parser.add_argument("--max_grad_norm", default=1.0, type=float, help="Max gradient norm.",)
+    parser.add_argument("--max_steps", default=1000000, type=int, help="If > 0: set total number of training steps to perform",)
+    parser.add_argument("--warmup_steps", default=0, type=int, help="Linear warmup over warmup_steps.",)
+    parser.add_argument("--logging_steps", type=int, default=500, help="Log every X updates steps.",)
+    parser.add_argument("--save_steps", type=int, default=500, help="Save checkpoint every X updates steps.",)
+    parser.add_argument("--no_cuda", action="store_true", help="Avoid using CUDA when available",)
+    parser.add_argument("--seed", type=int, default=42, help="random seed for initialization",)
+    parser.add_argument("--fp16", action="store_true", help="Whether to use 16-bit (mixed) precision (through NVIDIA apex) instead of 32-bit",)
+    parser.add_argument("--fp16_opt_level", type=str, default="O1", help="For fp16: Apex AMP optimization level selected in ['O0', 'O1', 'O2', \
+                                                                          and 'O3']. See details at https://nvidia.github.io/apex/amp.html",)
+    # ----------------- ANN HyperParam -------------------
+    parser.add_argument("--load_optimizer_scheduler", default=False, action="store_true", help="load scheduler from checkpoint or not",)
+    parser.add_argument("--single_warmup", default=False, action="store_true", help="use single or re-warmup",)
+    # ----------------- End of Doc Ranking HyperParam ----
+    parser.add_argument("--local_rank", type=int, default=-1, help="For distributed training: local_rank",)
+    parser.add_argument("--server_ip", type=str, default="", help="For distant debugging.",)
+    parser.add_argument("--server_port", type=str, default="", help="For distant debugging.",)
+
+    args = parser.parse_args()
+    
+    # -----------------------------------------------------
     set_env(args)
     tokenizer, model = load_model(args)
 
