@@ -3,7 +3,7 @@
 This repo provides personal implementation of paper [Approximate Nearest Neighbor Negative Contrastive Learning for Dense Text Retrieval](https://arxiv.org/pdf/2007.00808.pdf) in a simplified way. The code is refered to official version of [ANCE](https://github.com/microsoft/ANCE).
 
 <p align="center">
-  <img src="model/ance.png" alt="ANCE" width="600">
+  <img src="model/ance.png" alt="ANCE" width="700">
   <br>
   <b>Figure 1.</b> ANCE Asynchronous Training
 </p>
