@@ -45,8 +45,6 @@ python data/dpr_data.py 
         --answer_dir raw_data_dir/raw_qna_answers_data
 ```
 
-The data preprocessing command is included as the first step in the training command file commands/run_train.sh
-
 ## Training
 To train the model(s) in the paper, you need to start two commands in the following order:
 
