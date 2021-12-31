@@ -89,13 +89,19 @@ def write_query_rel(args, pid2offset, query_file, positive_id_file, out_query_fi
         print("Total lines written: " + str(out_line_count))
 
 def preprocess(args):
+    if not os.path.exists(args.out_data_dir):
+        os.makedirs(args.out_data_dir)
+    
+    args.data_dir = os.path.join(args.data_dir, "doc") if args.data_type == 0 else os.path.join(args.data_dir, "passage")
+    args.out_data_dir = args.out_data_dir.join("_{}_{}".format(args.model_name_or_path))
+    
     pid2offset = {}
     if args.data_type == 0:
         in_passage_path = os.path.join(args.data_dir,"msmarco-docs.tsv",)
     else:
         in_passage_path = os.path.join(args.data_dir, "collection.tsv",)
 
-    out_passage_path = os.path.join(args.out_data_dir, "passages",)
+    out_passage_path = os.path.join(args.out_data_dir, "passages",) # raw_data/ann_data_tokenizer_seqlen/passages
 
     if os.path.exists(out_passage_path):
         print("preprocessed data already exist, exit preprocessing")
@@ -131,11 +137,11 @@ def preprocess(args):
     print("done saving pid2offset")
 
     if args.data_type == 0:
-        write_query_rel(args,pid2offset, "msmarco-doctrain-queries.tsv", "msmarco-doctrain-qrels.tsv", "train-query", "train-qrel.tsv")
-        write_query_rel(args,pid2offset, "msmarco-test2019-queries.tsv", "2019qrels-docs.txt", "dev-query", "dev-qrel.tsv")
+        write_query_rel(args, pid2offset, "msmarco-doctrain-queries.tsv", "msmarco-doctrain-qrels.tsv", "train-query", "train-qrel.tsv")
+        write_query_rel(args, pid2offset, "msmarco-test2019-queries.tsv", "2019qrels-docs.txt", "dev-query", "dev-qrel.tsv")
     else:
-        write_query_rel(args,pid2offset, "queries.train.tsv", "qrels.train.tsv", "train-query", "train-qrel.tsv")
-        write_query_rel(args,pid2offset, "queries.dev.small.tsv", "qrels.dev.small.tsv", "dev-query", "dev-qrel.tsv")
+        write_query_rel(args, pid2offset, "queries.train.tsv", "qrels.train.tsv", "train-query", "train-qrel.tsv")
+        write_query_rel(args, pid2offset, "queries.dev.small.tsv", "qrels.dev.small.tsv", "dev-query", "dev-qrel.tsv")
 
 
 def PassagePreprocessingFn(args, line, tokenizer):
@@ -252,18 +258,16 @@ def GetTripletTrainingDataProcessingFn(args, query_cache, passage_cache):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_dir", default=None, type=str, required=True, help="The input data dir",)
-    parser.add_argument("--out_data_dir", default=None, type=str, required=True, help="The output data dir",)
-    parser.add_argument("--model_type", default=None, type=str, required=True, help="Model type selected in the list: " + ", ".join(MSMarcoConfigDict.keys()),)
-    parser.add_argument("--model_name_or_path", default=None, type=str, required=True, help="Path to pre-trained model or shortcut name selected in the list: " +", ".join(ALL_MODELS),)
-    parser.add_argument("--max_seq_length", default=128, type=int, help="The maximum total input sequence length after tokenization. Sequences longer ""than this will be truncated, sequences shorter will be padded.",)
+    parser.add_argument("--data_dir", default="./data/MSMARCO", type=str, required=True, help="The input data dir",)
+    parser.add_argument("--out_data_dir", default="./data/MSMARCO/ann_data", type=str, required=True, help="The output data dir",)
+    parser.add_argument("--model_type", default="rdot_nll_multi_chunk", type=str, required=True, help="Model type selected in the list: " + ", ".join(MSMarcoConfigDict.keys()),)
+    parser.add_argument("--model_name_or_path", default="roberta-base", type=str, required=True, help="Path to pre-trained model or shortcut name selected in the list: " +", ".join(ALL_MODELS),)
+    parser.add_argument("--max_seq_length", default=2048, type=int, help="The maximum total input sequence length after tokenization. Sequences longer ""than this will be truncated, sequences shorter will be padded.",)
     parser.add_argument("--max_query_length", default=64, type=int, help="The maximum total input sequence length after tokenization. Sequences longer ""than this will be truncated, sequences shorter will be padded.",)
     parser.add_argument("--max_doc_character", default=10000, type=int, help="used before tokenizer to save tokenizer latency",)
     parser.add_argument("--data_type", default=0, type=int, help="0 for doc, 1 for passage",)
     args = parser.parse_args()
 
-    if not os.path.exists(args.out_data_dir):
-        os.makedirs(args.out_data_dir)
     preprocess(args)
 
 
