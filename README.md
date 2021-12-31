@@ -14,7 +14,7 @@ This repo provides personal implementation of paper [Approximate Nearest Neighbo
 ```bash
 ANCE
 |--data
-    |--MSNARCO
+    |--MSMARCO
         |--doc        # raw data
         |--passage    # raw data
         |--ann_data_* # preprocessed data
