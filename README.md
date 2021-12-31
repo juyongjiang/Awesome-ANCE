@@ -14,7 +14,7 @@ This repo provides personal implementation of paper [Approximate Nearest Neighbo
 
 To download all the needed data, run:
 ```bash
-bash commands/data_download.sh 
+python data/download_data.py
 ```
 
 The command to preprocess passage and document data is listed below:
@@ -34,7 +34,7 @@ The data preprocessing command is included as the first step in the training com
 ## Training
 To train the model(s) in the paper, you need to start two commands in the following order:
 
-1. run commands/run_train.sh which does three things in a sequence:
+### 1. run commands/run_train.sh which does three things in a sequence:
 
 a. Data preprocessing: this is explained in the previous data preprocessing section. This step will check if the preprocess data folder exists, and will be skipped if the checking is positive.
 
@@ -74,7 +74,7 @@ python -m torch.distributed.launch --nproc_per_node=$gpu_no ../drivers/run_a
         --save_steps 10000 \
         --optimizer lamb 
 ```	
-2. Once training starts, start another job in parallel to fetch the latest checkpoint from the ongoing training and update the training data. To do that, run
+### 2. Once training starts, start another job in parallel to fetch the latest checkpoint from the ongoing training and update the training data. To do that, run
 ```bash
 bash commands/run_ann_data_gen.sh
 ```
