@@ -11,16 +11,12 @@ This repo provides personal implementation of paper [Approximate Nearest Neighbo
 'python==3.6.*'
 ```
 ## Data Download & Preprocessing
-**Download Dataset**
-
-To download all the needed data (skip if existed), run:
+**Download Dataset (skip if existed)**
 ```bash
 python data/download_data.py
 ```
 
 **MS MARCO (Passage | Document)**
-
-The command to preprocess passage and document data of MS MARCO is listed below:
 ```bash
 python data/msmarco_data.py 
         --data_dir raw_data_dir \
@@ -31,8 +27,6 @@ python data/msmarco_data.py 
         --data_type {use 1 for passage, 0 for document}
 ```
 **OpenQA (NA | TriviaQA)**
-
-The command to preprocess na and trivia data of OpenQA is listed below:
 ```bash
 python data/dpr_data.py 
         --out_data_dir preprocessed_data_dir \ 
