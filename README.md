@@ -10,7 +10,7 @@ This repo provides personal implementation of paper [Approximate Nearest Neighbo
 'wget'
 'python==3.6.*'
 ```
-## Data Download & Preprocessing
+## Data Preparation
 **Download Dataset (Skip if existed)**
 ```bash
 python data/download_data.py
