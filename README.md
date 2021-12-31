@@ -11,19 +11,21 @@ This repo provides personal implementation of paper [Approximate Nearest Neighbo
 'python==3.6.*'
 ```
 ## Data Preparation
+If raw data or preprocessed data has been existed, the relevant processing will be skipped. 
+The architecture of data is as follows:
 ```bash
 ANCE
 |--data
     |--MSMARCO
         |--doc        # raw data
         |--passage    # raw data
-        |--ann_data_* # preprocessed data
+        |--ann_data_* # preprocessed data (*_split* files have been removed)
     |--NQ_TQA
         |--checkpoint
         |--data
         |--ann_data_* # preprocessed data
 ```
-**Download Dataset (Skip if existed)**
+**Download Dataset**
 ```bash
 python data/download_data.py
 ```

@@ -7,6 +7,7 @@ import csv
 import pickle
 import argparse
 import json
+import glob
 import numpy as np
 
 from utils.util import pad_input_ids, multi_file_process, numbered_byte_file_generator, EmbeddingCache
@@ -144,6 +145,10 @@ def preprocess(args):
         write_query_rel(args, pid2offset, "queries.train.tsv", "qrels.train.tsv", "train-query", "train-qrel.tsv")
         write_query_rel(args, pid2offset, "queries.dev.small.tsv", "qrels.dev.small.tsv", "dev-query", "dev-qrel.tsv")
 
+    # remove *_split* files
+    for split_file in glob.glob(os.path.join(args.out_data_dir, '*_split*')):
+        print("remove %s" % split_file)
+        os.remove(split_file)
 
 def PassagePreprocessingFn(args, line, tokenizer):
     if args.data_type == 0:
