@@ -7,7 +7,6 @@ This repo provides personal implementation of paper [Approximate Nearest Neighbo
 - [ ] Model training (MS MARCO)
 - [ ] ANN data generation (MS MARCO)
 - [ ] Model inference
-
 - [ ] Warmup training
 - [ ] Model training (OpenQA)
 - [ ] ANN data generation (OpenQA)
