@@ -71,7 +71,7 @@ python data/dpr_data.py 
 ## Training
 To train dense retrieval (DR) model(s), e.g. BERT-Siamese, that encodes the query or document to *dense embeddings*. Please start four commands in the following order:
 
-**[1]. run `train_bm25_warmup.py` to train BM25 model as pretrained model which will be used to generate initial ANN data (step [2].b), termed warmup processing.**
+**[1]. run `train_bm25_warmup.py` to train BM25 model as pretrained model which will be used to generate initial ANN data (step [2]), termed warmup processing.**
 ```bash
 python -m torch.distributed.launch --nproc_per_node=1 
         train_bm25_warmup.py \
