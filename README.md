@@ -10,10 +10,10 @@ This repo provides personal implementation of paper [Approximate Nearest Neighbo
 
 ## TODO List
 - [x] Data download and proprecessing
-- [ ] Model training (MS MARCO)
-- [ ] ANN data generation (MS MARCO)
-- [ ] Model inference
-- [ ] Warmup training
+- [x] Model training (MS MARCO)
+- [x] ANN data generation (MS MARCO)
+- [x] Model inference
+- [x] Warmup training
 - [ ] Model training (OpenQA)
 - [ ] ANN data generation (OpenQA)
 
@@ -76,7 +76,7 @@ python train_bm25_warmup.py
 ```
 **2.run `train.py` which does three things (a, b, c) in a sequence:**
 ```bash
-python train.py
+python train_bert_ance.py
 ```
 a. Data preprocessing: this is explained in the previous data preprocessing section. This step will check if the preprocess data folder exists, and will be skipped if the checking is positive.
 
