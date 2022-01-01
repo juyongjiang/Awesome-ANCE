@@ -71,11 +71,11 @@ python data/dpr_data.py 
 ## Training
 To train dense retrieval (DR) model(s), e.g. BERT-Siamese, that encodes the query or document to *dense embeddings*. Please start three commands in the following order:
 
-**1.run `train_bm25_warmup.py` to train BM25 model as pretrained model which will be used to generate initial ANN data, termed warmup processing.**
+**[1]. run `train_bm25_warmup.py` to train BM25 model as pretrained model which will be used to generate initial ANN data (step [2].b), termed warmup processing.**
 ```bash
 python train_bm25_warmup.py
 ```
-**2.run `train.py` which does three things (a, b, c) in a sequence:**
+**[2]. run `train.py` which does three things (a, b, c) in a sequence:**
 ```bash
 python train_bert_ance.py
 ```
@@ -116,7 +116,7 @@ python -m torch.distributed.launch --nproc_per_node=$gpu_no ../drivers/run_a
         --save_steps 10000 \
         --optimizer lamb 
 ```	
-**2.Once training starts, start another job in parallel to fetch the latest checkpoint from the ongoing training and update the training data. To do that, run**
+**[3]. Once training starts, start another job in parallel to fetch the latest checkpoint from the ongoing training and update the training data. To do that, run**
 ```bash
 python -m torch.distributed.launch --nproc_per_node=gpu_no ann_data_gen.py \
         --training_dir {model checkpoint location} \ # if it is not existed, it will be pretrained checkpoint location automatically. 
