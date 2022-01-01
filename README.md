@@ -97,7 +97,7 @@ python -m torch.distributed.launch --nproc_per_node=1
         --logging_steps_per_eval 1 \
         --fp16 \
         --optimizer lamb \
-        --log_dir ~/tensorboard/{DLWS_JOB_ID}/logs/OSpass
+        --log_dir ~/tensorboard/logs/OSpass
 ```
 **[2]. run `ann_data_gen.py` to initial ANN data generation, this step will use the pretrained BM25 warmup checkpoint (step [1]) to generate the initial training data. The command is as follow:**
 ```bash

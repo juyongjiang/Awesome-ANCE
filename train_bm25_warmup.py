@@ -291,60 +291,6 @@ def load_stuff(model_type, args):
 
     return config, tokenizer, model, configObj
 
-
-def get_arguments():
-    parser = argparse.ArgumentParser()
-    # required arguments
-    parser.add_argument("--data_dir", default=None, type=str, required=True, help="The input data dir. Should contain the .tsv files (or other data files) for the task.",)
-    parser.add_argument("--train_model_type", default=None, type=str, required=True,)
-    parser.add_argument("--model_name_or_path", default=None, type=str, required=True,)
-    parser.add_argument("--task_name", default=None, type=str, required=True,)
-    parser.add_argument("--output_dir", default=None, type=str, required=True, help="The output directory where the model predictions and checkpoints will be written.",)
-    # Other parameters
-    parser.add_argument("--config_name", default="", type=str, help="Pretrained config name or path if not the same as model_name",)
-    parser.add_argument("--tokenizer_name", default="", type=str, help="Pretrained tokenizer name or path if not the same as model_name",)
-    parser.add_argument("--cache_dir", default="", type=str, help="Where do you want to store the pre-trained models downloaded from s3",)
-    parser.add_argument("--max_seq_length", default=128, type=int, help="The maximum total input sequence length after tokenization. \
-                                                            Sequences longer than this will be truncated, sequences shorter will be padded.",)
-    parser.add_argument("--do_train", action="store_true", help="Whether to run training.",)
-    parser.add_argument("--do_eval", action="store_true", help="Whether to run eval on the dev set.",)
-    parser.add_argument("--evaluate_during_training", action="store_true", help="Rul evaluation during training at each logging step.",)
-    parser.add_argument("--do_lower_case", action="store_true", help="Set this flag if you are using an uncased model.",)
-    parser.add_argument("--log_dir", default=None, type=str, help="Tensorboard log dir",)
-    parser.add_argument("--eval_type", default="full", type=str, help="MSMarco eval type - dev full or small",)
-    parser.add_argument("--optimizer", default="lamb", type=str, help="Optimizer - lamb or adamW",)
-    parser.add_argument("--scheduler", default="linear", type=str, help="Scheduler - linear or cosine",)
-    parser.add_argument("--per_gpu_train_batch_size", default=8, type=int, help="Batch size per GPU/CPU for training.",)
-    parser.add_argument("--per_gpu_eval_batch_size", default=8, type=int, help="Batch size per GPU/CPU for evaluation.",)
-    parser.add_argument("--gradient_accumulation_steps", type=int, default=1, help="Number of updates steps to accumulate before performing a backward/update pass.",)
-    parser.add_argument("--learning_rate", default=5e-5, type=float, help="The initial learning rate for Adam.",)
-    parser.add_argument("--weight_decay", default=0.0, type=float, help="Weight decay if we apply some.",)
-    parser.add_argument("--adam_epsilon", default=1e-8, type=float, help="Epsilon for Adam optimizer.",)
-    parser.add_argument("--max_grad_norm", default=1.0, type=float, help="Max gradient norm.",)
-    parser.add_argument("--num_train_epochs", default=3.0, type=float, help="Total number of training epochs to perform.",)
-    parser.add_argument("--max_steps", default=-1, type=int, help="If > 0: set total number of training steps to perform. Override num_train_epochs.",)
-    parser.add_argument("--warmup_steps", default=0, type=int, help="Linear warmup over warmup_steps.",)
-    parser.add_argument("--logging_steps", type=int, default=500, help="Log every X updates steps.",)
-    parser.add_argument("--logging_steps_per_eval", type=int, default=10, help="Eval every X logging steps.",)
-    parser.add_argument("--save_steps", type=int, default=500, help="Save checkpoint every X updates steps.",)
-    parser.add_argument("--eval_all_checkpoints", action="store_true", help="Evaluate all checkpoints starting with the same prefix as model_name ending and ending with step number",)
-    parser.add_argument("--no_cuda", action="store_true", help="Avoid using CUDA when available",)
-    parser.add_argument("--overwrite_output_dir", action="store_true", help="Overwrite the content of the output directory",)
-    parser.add_argument("--overwrite_cache", action="store_true", help="Overwrite the cached training and evaluation sets",)
-    parser.add_argument("--seed", type=int, default=42, help="random seed for initialization",)
-    parser.add_argument("--fp16", action="store_true", help="Whether to use 16-bit (mixed) precision (through NVIDIA apex) instead of 32-bit",)
-    parser.add_argument("--fp16_opt_level", type=str, default="O1", help="For fp16: Apex AMP optimization level selected in ['O0', 'O1', 'O2', and 'O3']. \
-                                                                    See details at https://nvidia.github.io/apex/amp.html",)
-    parser.add_argument("--expected_train_size", default=100000, type=int, help="Expected train dataset size",)
-    parser.add_argument("--load_optimizer_scheduler", default=False, action="store_true", help="load scheduler from checkpoint or not",)
-    parser.add_argument("--local_rank", type=int, default=-1, help="For distributed training: local_rank",)
-    parser.add_argument("--server_ip", type=str, default="", help="For distant debugging.",)
-    parser.add_argument("--server_port", type=str, default="", help="For distant debugging.",)
-    args = parser.parse_args()
-
-    return args
-
-
 def set_env(args):
     if (os.path.exists(args.output_dir) and os.listdir(args.output_dir) and args.do_train and not args.overwrite_output_dir):
         raise ValueError("Output directory ({}) already exists and is not empty. Use --overwrite_output_dir to overcome.".format(args.output_dir))
@@ -429,7 +375,55 @@ def evaluation(args, model, tokenizer):
 
 
 def main():
-    args = get_arguments()
+    parser = argparse.ArgumentParser()
+    # required arguments
+    parser.add_argument("--data_dir", default=None, type=str, required=True, help="The input data dir. Should contain the .tsv files (or other data files) for the task.",)
+    parser.add_argument("--train_model_type", default=None, type=str, required=True,)
+    parser.add_argument("--model_name_or_path", default=None, type=str, required=True,)
+    parser.add_argument("--task_name", default=None, type=str, required=True,)
+    parser.add_argument("--output_dir", default=None, type=str, required=True, help="The output directory where the model predictions and checkpoints will be written.",)
+    # Other parameters
+    parser.add_argument("--config_name", default="", type=str, help="Pretrained config name or path if not the same as model_name",)
+    parser.add_argument("--tokenizer_name", default="", type=str, help="Pretrained tokenizer name or path if not the same as model_name",)
+    parser.add_argument("--cache_dir", default="", type=str, help="Where do you want to store the pre-trained models downloaded from s3",)
+    parser.add_argument("--max_seq_length", default=128, type=int, help="The maximum total input sequence length after tokenization. \
+                                                            Sequences longer than this will be truncated, sequences shorter will be padded.",)
+    parser.add_argument("--do_train", action="store_true", help="Whether to run training.",)
+    parser.add_argument("--do_eval", action="store_true", help="Whether to run eval on the dev set.",)
+    parser.add_argument("--evaluate_during_training", action="store_true", help="Rul evaluation during training at each logging step.",)
+    parser.add_argument("--do_lower_case", action="store_true", help="Set this flag if you are using an uncased model.",)
+    parser.add_argument("--log_dir", default=None, type=str, help="Tensorboard log dir",)
+    parser.add_argument("--eval_type", default="full", type=str, help="MSMarco eval type - dev full or small",)
+    parser.add_argument("--optimizer", default="lamb", type=str, help="Optimizer - lamb or adamW",)
+    parser.add_argument("--scheduler", default="linear", type=str, help="Scheduler - linear or cosine",)
+    parser.add_argument("--per_gpu_train_batch_size", default=8, type=int, help="Batch size per GPU/CPU for training.",)
+    parser.add_argument("--per_gpu_eval_batch_size", default=8, type=int, help="Batch size per GPU/CPU for evaluation.",)
+    parser.add_argument("--gradient_accumulation_steps", type=int, default=1, help="Number of updates steps to accumulate before performing a backward/update pass.",)
+    parser.add_argument("--learning_rate", default=5e-5, type=float, help="The initial learning rate for Adam.",)
+    parser.add_argument("--weight_decay", default=0.0, type=float, help="Weight decay if we apply some.",)
+    parser.add_argument("--adam_epsilon", default=1e-8, type=float, help="Epsilon for Adam optimizer.",)
+    parser.add_argument("--max_grad_norm", default=1.0, type=float, help="Max gradient norm.",)
+    parser.add_argument("--num_train_epochs", default=3.0, type=float, help="Total number of training epochs to perform.",)
+    parser.add_argument("--max_steps", default=-1, type=int, help="If > 0: set total number of training steps to perform. Override num_train_epochs.",)
+    parser.add_argument("--warmup_steps", default=0, type=int, help="Linear warmup over warmup_steps.",)
+    parser.add_argument("--logging_steps", type=int, default=500, help="Log every X updates steps.",)
+    parser.add_argument("--logging_steps_per_eval", type=int, default=10, help="Eval every X logging steps.",)
+    parser.add_argument("--save_steps", type=int, default=500, help="Save checkpoint every X updates steps.",)
+    parser.add_argument("--eval_all_checkpoints", action="store_true", help="Evaluate all checkpoints starting with the same prefix as model_name ending and ending with step number",)
+    parser.add_argument("--no_cuda", action="store_true", help="Avoid using CUDA when available",)
+    parser.add_argument("--overwrite_output_dir", action="store_true", help="Overwrite the content of the output directory",)
+    parser.add_argument("--overwrite_cache", action="store_true", help="Overwrite the cached training and evaluation sets",)
+    parser.add_argument("--seed", type=int, default=42, help="random seed for initialization",)
+    parser.add_argument("--fp16", action="store_true", help="Whether to use 16-bit (mixed) precision (through NVIDIA apex) instead of 32-bit",)
+    parser.add_argument("--fp16_opt_level", type=str, default="O1", help="For fp16: Apex AMP optimization level selected in ['O0', 'O1', 'O2', and 'O3']. \
+                                                                    See details at https://nvidia.github.io/apex/amp.html",)
+    parser.add_argument("--expected_train_size", default=100000, type=int, help="Expected train dataset size",)
+    parser.add_argument("--load_optimizer_scheduler", default=False, action="store_true", help="load scheduler from checkpoint or not",)
+    parser.add_argument("--local_rank", type=int, default=-1, help="For distributed training: local_rank",)
+    parser.add_argument("--server_ip", type=str, default="", help="For distant debugging.",)
+    parser.add_argument("--server_port", type=str, default="", help="For distant debugging.",)
+    args = parser.parse_args()
+
     set_env(args)
 
     config, tokenizer, model, configObj = load_stuff(args.train_model_type, args)
@@ -441,7 +435,7 @@ def main():
         def train_fn(line, i):
             return configObj.process_fn(line, i, tokenizer, args)
 
-        with open(args.data_dir+"/triples.train.small.tsv", encoding="utf-8-sig") as f:
+        with open(os.path.join(args.data_dir, "passage/triples.train.small.tsv", encoding="utf-8-sig")) as f:
             train_batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
             global_step, tr_loss = train(args, model, tokenizer, f, train_fn)
             logger.info(" global_step = %s, average loss = %s", global_step, tr_loss)
