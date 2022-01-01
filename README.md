@@ -69,21 +69,39 @@ python data/dpr_data.py 
 ```
 
 ## Training
-To train dense retrieval (DR) model(s), e.g. BERT-Siamese, that encodes the query or document to *dense embeddings*. Please start three commands in the following order:
+To train dense retrieval (DR) model(s), e.g. BERT-Siamese, that encodes the query or document to *dense embeddings*. Please start four commands in the following order:
 
 **[1]. run `train_bm25_warmup.py` to train BM25 model as pretrained model which will be used to generate initial ANN data (step [2].b), termed warmup processing.**
 ```bash
-python train_bm25_warmup.py
+python -m torch.distributed.launch --nproc_per_node=1 
+        train_bm25_warmup.py \
+        --train_model_type rdot_nll \
+        --model_name_or_path roberta-base \
+        --task_name MSMarco \
+        --do_train \
+        --evaluate_during_training \
+        --data_dir {location of your raw data}  
+        --max_seq_length 128 
+        --per_gpu_eval_batch_size=256 \
+        --per_gpu_train_batch_size=32 \
+        --learning_rate 2e-4  \
+        --logging_steps 100   \
+        --num_train_epochs 2.0  \
+        --output_dir {location for checkpoint saving} \
+        --warmup_steps 1000  \
+        --overwrite_output_dir \
+        --save_steps 30000 \
+        --gradient_accumulation_steps 1 \
+        --expected_train_size 35000000 \
+        --logging_steps_per_eval 1 \
+        --fp16 \
+        --optimizer lamb \
+        --log_dir ~/tensorboard/{DLWS_JOB_ID}/logs/OSpass
 ```
-**[2]. run `train.py` which does three things (a, b, c) in a sequence:**
+**[2]. run `ann_data_gen.py` to initial ANN data generation, this step will use the pretrained BM25 warmup checkpoint (step [1]) to generate the initial training data. The command is as follow:**
 ```bash
-python train_bert_ance.py
-```
-a. Data preprocessing: this is explained in the previous data preprocessing section. This step will check if the preprocess data folder exists, and will be skipped if the checking is positive.
-
-b. Initial ANN data generation: this step will use the pretrained BM25 warmup checkpoint (step 1.) to generate the initial training data. The command is as follow:
-```bash
-python -m torch.distributed.launch --nproc_per_node=gpu_no ann_data_gen.py \
+python -m torch.distributed.launch --nproc_per_node=gpu_no 
+        ann_data_gen.py \
         --training_dir {model checkpoint location} \ # if it is not existed, it will be pretrained checkpoint location automatically. 
         --init_model_dir {pretrained BM25 warmup checkpoint location} \ 
         --model_type rdot_nll \
@@ -96,29 +114,30 @@ python -m torch.distributed.launch --nproc_per_node=gpu_no ann_data_gen.py 
         --negative_sample {negative samples per query(20)} \ 
         --end_output_num 0 # only set as 0 for initial data generation, do not set this otherwise
 ```
-
-c. Training: ANCE training with the most recently generated ANN data, the command is as follow:
+**[3]. run `train_bert_ance.py` to start train dense retrieval (DR) model with ANCE Negatives sampleing strategy. ANCE training will use the most recently generated ANN data, the command is as follow:**
 ```bash
-python -m torch.distributed.launch --nproc_per_node=$gpu_no ../drivers/run_ann.py 
+python -m torch.distributed.launch --nproc_per_node=gpu_no 
+        train_bert_ance.py 
         --model_type rdot_nll \
-        --model_name_or_path $pretrained_checkpoint_dir \
+        --model_name_or_path pretrained_checkpoint_dir \
         --task_name MSMarco \
         --triplet {# default = False, action="store_true", help="Whether to run training}\ 
-        --data_dir $preprocessed_data_dir \
+        --data_dir preprocessed_data_dir \
         --ann_dir {location of the ANN generated training data} \ 
         --max_seq_length 512 \
         --per_gpu_train_batch_size=8 \
         --gradient_accumulation_steps 2 \
         --learning_rate 1e-6 \
-        --output_dir $model_dir \
+        --output_dir model_dir \
         --warmup_steps 5000 \
         --logging_steps 100 \
         --save_steps 10000 \
         --optimizer lamb 
 ```	
-**[3]. Once training starts, start another job in parallel to fetch the latest checkpoint from the ongoing training and update the training data. To do that, run**
+**[4]. Once training starts, start another job in parallel to fetch the latest checkpoint from the ongoing training and update the training data. To do that, run**
 ```bash
-python -m torch.distributed.launch --nproc_per_node=gpu_no ann_data_gen.py \
+python -m torch.distributed.launch --nproc_per_node=gpu_no 
+        ann_data_gen.py \
         --training_dir {model checkpoint location} \ # if it is not existed, it will be pretrained checkpoint location automatically. 
         --init_model_dir {pretrained checkpoint location} \ 
         --model_type rdot_nll \
