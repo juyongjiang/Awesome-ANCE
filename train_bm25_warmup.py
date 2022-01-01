@@ -422,10 +422,12 @@ def main():
     parser.add_argument("--local_rank", type=int, default=-1, help="For distributed training: local_rank",)
     parser.add_argument("--server_ip", type=str, default="", help="For distant debugging.",)
     parser.add_argument("--server_port", type=str, default="", help="For distant debugging.",)
+    parser.add_argument("--data_type", default=1, type=int, help="0 for doc, 1 for passage",)
     args = parser.parse_args()
 
-    set_env(args)
+    args.data_dir = os.path.join(args.data_dir, "doc") if args.data_type == 0 else os.path.join(args.data_dir, "passage")
 
+    set_env(args)
     config, tokenizer, model, configObj = load_stuff(args.train_model_type, args)
 
     # Training
@@ -435,7 +437,7 @@ def main():
         def train_fn(line, i):
             return configObj.process_fn(line, i, tokenizer, args)
 
-        with open(os.path.join(args.data_dir, "passage/triples.train.small.tsv"), encoding="utf-8-sig") as f:
+        with open(os.path.join(args.data_dir, "triples.train.small.tsv"), encoding="utf-8-sig") as f:
             train_batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
             global_step, tr_loss = train(args, model, tokenizer, f, train_fn)
             logger.info(" global_step = %s, average loss = %s", global_step, tr_loss)

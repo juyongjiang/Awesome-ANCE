@@ -17,21 +17,23 @@ This repo provides personal implementation of paper [Approximate Nearest Neighbo
 - [x] Model inference
 - [ ] Model training (OpenQA)
 - [ ] ANN data generation (OpenQA)
+- [ ] Config .yaml
 
 ## Environment
 ```bash
 'transformers==2.3.0' 
+'scikit-learn' # if scikit-learn passage is not existed, it will occurs the bug of "ImportError: from transformers import glue_compute_metrics"
+'tokenizers'
 'apex'
 # git clone https://www.github.com/nvidia/apex
 # cd apex
 # python setup.py install
 'pytrec-eval'
 'faiss-cpu'
-'wget'
 'python==3.6.*'
 ```
 ## Data Preparation
-If raw data or preprocessed data has been existed, the relevant processing will be skipped. 
+If raw data or preprocessed data has been existed, the relevant processing will be skipped. Note that raw data can be used for BM25 directly, but we need preprocessed data to train dense retrival (DR) model, e.g. BERT-Siamese.  
 The architecture of data is as follows:
 ```bash
 ANCE
@@ -85,7 +87,7 @@ python -m torch.distributed.launch --nproc_per_node=1
         --task_name MSMarco \
         --do_train \
         --evaluate_during_training \
-        --data_dir {location of your raw data}  
+        --data_dir {location of your raw data}  # raw data
         --max_seq_length 128 
         --per_gpu_eval_batch_size=256 \
         --per_gpu_train_batch_size=32 \
@@ -102,6 +104,7 @@ python -m torch.distributed.launch --nproc_per_node=1
         --fp16 \
         --optimizer lamb \
         --log_dir ./tensorboard/logs/OSpass
+        --data_type {use 1 for passage, 0 for document}
 ```
 **[2]. run `ann_data_gen.py` to initial ANN data generation, this step will use the pretrained BM25 warmup checkpoint (step [1]) to generate the initial training data. The command is as follow:**
 ```bash
@@ -127,7 +130,7 @@ python -m torch.distributed.launch --nproc_per_node=gpu_no 
         --model_name_or_path pretrained_checkpoint_dir \
         --task_name MSMarco \
         --triplet {# default = False, action="store_true", help="Whether to run training}\ 
-        --data_dir preprocessed_data_dir \
+        --data_dir preprocessed_data_dir \ # preprocessed data
         --ann_dir {location of the ANN generated training data} \ 
         --max_seq_length 512 \
         --per_gpu_train_batch_size=8 \
