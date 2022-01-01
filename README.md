@@ -153,7 +153,7 @@ python -m torch.distributed.launch --nproc_per_node=gpu_no 
 ```
 
 ## Evaluation
-The evaluation calculates full ranking and reranking metrics, including **MRR, NDCG, hole rate, recall for passage/document, dev/eval set specified by user. The command is as follow:
+The evaluation calculates full ranking and reranking metrics, including **MRR, NDCG, hole rate, recall for passage/document, dev/eval set specified by user**. The command is as follow:
 ```bash        
 checkpoint_path = {location for dumpped query and passage/document embeddings which is output_dir from run_ann_data_gen.py}
 checkpoint =  {embedding from which checkpoint(ie: 200000)}
