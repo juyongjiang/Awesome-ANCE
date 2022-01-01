@@ -435,7 +435,7 @@ def main():
         def train_fn(line, i):
             return configObj.process_fn(line, i, tokenizer, args)
 
-        with open(os.path.join(args.data_dir, "passage/triples.train.small.tsv", encoding="utf-8-sig")) as f:
+        with open(os.path.join(args.data_dir, "passage/triples.train.small.tsv"), encoding="utf-8-sig") as f:
             train_batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
             global_step, tr_loss = train(args, model, tokenizer, f, train_fn)
             logger.info(" global_step = %s, average loss = %s", global_step, tr_loss)

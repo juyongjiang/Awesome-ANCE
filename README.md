@@ -21,6 +21,10 @@ This repo provides personal implementation of paper [Approximate Nearest Neighbo
 ## Environment
 ```bash
 'transformers==2.3.0' 
+'apex'
+# git clone https://www.github.com/nvidia/apex
+# cd apex
+# python setup.py install
 'pytrec-eval'
 'faiss-cpu'
 'wget'
