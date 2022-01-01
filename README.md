@@ -10,10 +10,11 @@ This repo provides personal implementation of paper [Approximate Nearest Neighbo
 
 ## TODO List
 - [x] Data download and proprecessing
-- [x] Model training (MS MARCO)
+- [x] BM25 warmup training
 - [x] ANN data generation (MS MARCO)
+- [x] Model training (MS MARCO)
+- [x] Model evaluation
 - [x] Model inference
-- [x] Warmup training
 - [ ] Model training (OpenQA)
 - [ ] ANN data generation (OpenQA)
 
@@ -151,12 +152,9 @@ python -m torch.distributed.launch --nproc_per_node=gpu_no 
         --end_output_num 0 # only set as 0 for initial data generation, do not set this otherwise
 ```
 
-## Inference
-The command for inferencing query and passage/doc embeddings is the same as that for Initial ANN data generation described above as the first step in ANN data generation is inference. However you need to add --inference to the command to have the program to stop after the initial inference step. commands/run_inference.sh provides a sample command.
-
 ## Evaluation
-The evaluation is done through "Calculate Metrics.ipynb". This notebook calculates full ranking and reranking metrics used in the paper including NDCG, MRR, hole rate, recall for passage/document, dev/eval set specified by user. In order to run it, you need to define the following parameters at the beginning of the Jupyter notebook.
-```python        
+The evaluation calculates full ranking and reranking metrics used in the paper including **MRR, NDCG, hole rate, recall for passage/document, dev/eval set specified by user. The command is as follow:
+```bash        
 checkpoint_path = {location for dumpped query and passage/document embeddings which is output_dir from run_ann_data_gen.py}
 checkpoint =  {embedding from which checkpoint(ie: 200000)}
 data_type =  {0 for document, 1 for passage}
@@ -164,3 +162,6 @@ test_set =  {0 for MSMARCO dev_set, 1 for TREC eval_set}
 raw_data_dir = 
 processed_data_dir = 
 ```
+
+## Inference
+The command for inferencing query and passage/doc embeddings is the same as that for Initial ANN data generation described above as the first step in ANN data generation is inference. However you need to add --inference to the command to have the program to stop after the initial inference step. commands/run_inference.sh provides a sample command.
