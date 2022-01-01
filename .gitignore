@@ -11,7 +11,7 @@ data/NQ_TQA/
 data/dataset/
 # C extensions
 *.so
-
+tensorboard/
 # Distribution / packaging
 .Python
 build/
@@ -32,7 +32,7 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
-
+saved/
 # PyInstaller
 #  Usually these files are written by a python script from a template
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.
