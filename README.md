@@ -69,7 +69,7 @@ python data/dpr_data.py 
 ```
 
 ## Training
-To train the model(s) in the paper, you need to start two commands in the following order:
+To train dense retrieval model(s), e.g. BERT-Siamese, that encodes the query or document to dense embeddings. Please start three commands in the following order:
 **1.run `train_bm25_warmup.py` to train BM25 model as pretrained model which will be used to generate initial ANN data, termed warmup processing.**
 ```bash
 python train_bm25_warmup.py
