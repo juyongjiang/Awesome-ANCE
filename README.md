@@ -175,18 +175,17 @@ python -m torch.distributed.launch --nproc_per_node=gpu_no
         --topk_training {top k candidates for ANN search(ie:200)} 
         --negative_sample {negative samples per query(20)} 
         --end_output_num 0 # only set as 0 for initial data generation, do not set this otherwise
-        
-        --inference 
+        --inference # 
 ```
 
 ## Evaluation
 The evaluation calculates full ranking and reranking metrics including **MRR, NDCG, Hole Rate, Recall** for passage/document. But dev/eval set should be specified by user. The detailed command is as follow:
 ```bash  
 python eval_metrics.py      
-    --raw_data_dir {The path of raw data dir} \
-    --processed_data_dir {The path of preprocessed data dir} \
-    --checkpoint_path {Location for dumpped query and passage/document embeddings which is output_dir} \
-    --checkpoint {Embedding from which checkpoint(ie: 200000)} \
-    --data_type {0 for document, 1 for passage} \
-    --test_set {0 for dev_set, 1 for eval_set}
+        --raw_data_dir {The path of raw data dir} \
+        --processed_data_dir {The path of preprocessed data dir} \
+        --checkpoint_path {Location for dumpped query and passage/document embeddings which is output_dir} \
+        --checkpoint {Embedding from which checkpoint(ie: 200000)} \
+        --data_type {0 for document, 1 for passage} \
+        --test_set {0 for dev_set, 1 for eval_set}
 ```
