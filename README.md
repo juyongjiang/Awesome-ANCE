@@ -159,16 +159,34 @@ python -m torch.distributed.launch --nproc_per_node=gpu_no 
         --end_output_num 0 # only set as 0 for initial data generation, do not set this otherwise
 ```
 
-## Evaluation
-The evaluation calculates full ranking and reranking metrics including **MRR, NDCG, Hole Rate, Recall** for passage/document. But dev/eval set should be specified by user. The detailed command is as follow:
-```bash        
-checkpoint_path = {location for dumpped query and passage/document embeddings which is output_dir from run_ann_data_gen.py}
-checkpoint =  {embedding from which checkpoint(ie: 200000)}
-data_type =  {0 for document, 1 for passage}
-test_set =  {0 for MSMARCO dev_set, 1 for TREC eval_set}
-raw_data_dir = 
-processed_data_dir = 
+## Inference
+The command for inferencing query and passage/doc embeddings is the same as that for Initial ANN data generation described above in [2] step. However, you need to add `--inference` to the command to have the program to stop after the initial inference step. The command is as follow: 
+```bash
+python -m torch.distributed.launch --nproc_per_node=gpu_no 
+        ann_data_gen.py 
+        --training_dir {model checkpoint location} \ # if it is not existed, it will be pretrained checkpoint location automatically.  \
+        --init_model_dir {pretrained BM25 warmup checkpoint location} 
+        --model_type rdot_nll 
+        --output_dir model_ann_data_dir \
+        --cache_dir model_ann_data_dir_cache \
+        --data_dir preprocessed_data_dir 
+        --max_seq_length 512 \ 
+        --per_gpu_eval_batch_size 16 
+        --topk_training {top k candidates for ANN search(ie:200)} 
+        --negative_sample {negative samples per query(20)} 
+        --end_output_num 0 # only set as 0 for initial data generation, do not set this otherwise
+        
+        --inference 
 ```
 
-## Inference
-The command for inferencing query and passage/doc embeddings is the same as that for Initial ANN data generation described above as the first step in ANN data generation is inference. However you need to add --inference to the command to have the program to stop after the initial inference step. commands/run_inference.sh provides a sample command.
+## Evaluation
+The evaluation calculates full ranking and reranking metrics including **MRR, NDCG, Hole Rate, Recall** for passage/document. But dev/eval set should be specified by user. The detailed command is as follow:
+```bash  
+python eval_metrics.py      
+    --raw_data_dir {The path of raw data dir} \
+    --processed_data_dir {The path of preprocessed data dir} \
+    --checkpoint_path {Location for dumpped query and passage/document embeddings which is output_dir} \
+    --checkpoint {Embedding from which checkpoint(ie: 200000)} \
+    --data_type {0 for document, 1 for passage} \
+    --test_set {0 for dev_set, 1 for eval_set}
+```
