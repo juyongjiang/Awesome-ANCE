@@ -1,14 +1,15 @@
 import sys
 import csv
-from tqdm import tqdm 
 import collections
 import gzip
 import pickle
+import argparse
 import numpy as np
 import faiss
 import os
 import pytrec_eval
 import json
+from tqdm import tqdm 
 from utils.msmarco_eval import quality_checks_qids, compute_metrics, load_reference
 
 ## Calculate Metrics
@@ -238,7 +239,7 @@ def main():
             all_dev_I.append(dev_I[0])
         result = EvalDevQuery(dev_query_embedding2id, passage_embedding2id, dev_query_positive_id, all_dev_I, topN)
         final_ndcg, eval_query_cnt, final_Map, final_mrr, final_recall, hole_rate, ms_mrr, Ahole_rate, metrics, prediction = result
-        print("Reranking Results for checkpoint "+str(args.checkpoint))
+        print("Reranking Results for checkpoint " + str(args.checkpoint))
         print("Reranking NDCG@10:" + str(final_ndcg))
         print("Reranking map@10:" + str(final_Map))
         print("Reranking pytrec_mrr:" + str(final_mrr))
@@ -255,7 +256,7 @@ def main():
     _, dev_I = cpu_index.search(dev_query_embedding, topN)
     result = EvalDevQuery(dev_query_embedding2id, passage_embedding2id, dev_query_positive_id, dev_I, topN)
     final_ndcg, eval_query_cnt, final_Map, final_mrr, final_recall, hole_rate, ms_mrr, Ahole_rate, metrics, prediction = result
-    print("Results for checkpoint "+str(args.checkpoint))
+    print("Results for checkpoint " + str(args.checkpoint))
     print("NDCG@10:" + str(final_ndcg))
     print("map@10:" + str(final_Map))
     print("pytrec_mrr:" + str(final_mrr))
