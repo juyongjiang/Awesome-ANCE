@@ -112,18 +112,18 @@ def main():
     parser.add_argument("--raw_data_dir", default=None, type=str, help="The path of raw data dir",)
     parser.add_argument("--processed_data_dir", default=None, type=str, help="The path of preprocessed data dir",)
     parser.add_argument("--checkpoint_path", default=None, type=str, help="Location for dumpped query and passage/document embeddings which is output_dir",)
-    parser.add_argument("--checkpoint", default=None, type=str, help="Embedding from which checkpoint(ie: 200000)",)
-    parser.add_argument("--data_type", default=None, type=str, help="0 for document, 1 for passage",)
-    parser.add_argument("--test_set", default=None, type=str, help="0 for dev_set, 1 for eval_set",)
+    parser.add_argument("--checkpoint", default=None, type=int, help="Embedding from which checkpoint(ie: 200000)",)
+    parser.add_argument("--data_type", default=None, type=int, help="0 for document, 1 for passage",)
+    parser.add_argument("--test_set", default=None, type=int, help="0 for dev_set, 1 for eval_set",)
     args = parser.parse_args()
 
     ## Load Qrel
-    if data_type == 0:
+    if args.data_type == 0:
         topN = 100
     else:
         topN = 1000
     dev_query_positive_id = {}
-    query_positive_id_path = os.path.join(processed_data_dir, "dev-qrel.tsv")
+    query_positive_id_path = os.path.join(args.processed_data_dir, "dev-qrel.tsv")
 
     with open(query_positive_id_path, 'r', encoding='utf8') as f:
         tsvreader = csv.reader(f, delimiter="\t")
@@ -135,22 +135,22 @@ def main():
             dev_query_positive_id[topicid][docid] = int(rel)
 
     ## Prepare rerank data
-    qidmap_path = processed_data_dir+"/qid2offset.pickle"
-    pidmap_path = processed_data_dir+"/pid2offset.pickle"
-    if data_type == 0:
-        if test_set == 1:
-            query_path = raw_data_dir+"/msmarco-test2019-queries.tsv"
-            passage_path = raw_data_dir+"/msmarco-doctest2019-top100"
+    qidmap_path = args.processed_data_dir+"/qid2offset.pickle"
+    pidmap_path = args.processed_data_dir+"/pid2offset.pickle"
+    if args.data_type == 0:
+        if args.test_set == 1:
+            query_path = os.path.join(args.raw_data_dir, "doc/msmarco-test2019-queries.tsv")
+            passage_path = os.path.join(args.raw_data_dir, "doc/msmarco-doctest2019-top100")
         else:
-            query_path = raw_data_dir+"/msmarco-docdev-queries.tsv"
-            passage_path = raw_data_dir+"/msmarco-docdev-top100"
+            query_path = os.path.join(args.raw_data_dir, "doc/msmarco-docdev-queries.tsv")
+            passage_path = os.path.join(args.raw_data_dir, "doc/msmarco-docdev-top100")
     else:
-        if test_set == 1:
-            query_path = raw_data_dir+"/msmarco-test2019-queries.tsv"
-            passage_path = raw_data_dir+"/msmarco-passagetest2019-top1000.tsv"
+        if args.test_set == 1:
+            query_path = os.path.join(args.raw_data_dir, "doc/msmarco-test2019-queries.tsv")
+            passage_path = os.path.join(args.raw_data_dir, "passage/msmarco-passagetest2019-top1000.tsv")
         else:
-            query_path = raw_data_dir+"/queries.dev.small.tsv"
-            passage_path = raw_data_dir+"/top1000.dev"
+            query_path = os.path.join(args.raw_data_dir, "passage/queries.dev.small.tsv")
+            passage_path = os.path.join(args.raw_data_dir, "passage/top1000.dev")
         
     with open(qidmap_path, 'rb') as handle:
         qidmap = pickle.load(handle)
@@ -167,7 +167,7 @@ def main():
     bm25 = collections.defaultdict(set)
     with gzip.open(passage_path, 'rt', encoding='utf-8') if passage_path[-2:] == "gz" else open(passage_path, 'rt', encoding='utf-8') as f:
         for line in tqdm(f):
-            if data_type == 0:
+            if args.data_type == 0:
                 [qid, Q0, pid, rank, score, runstring] = line.split(' ')
                 pid = pid[1:]
             else:
@@ -184,18 +184,18 @@ def main():
     passage_embedding2id = []
     for i in range(8):
         try:
-            with open(checkpoint_path + "dev_query_"+str(checkpoint)+"__emb_p__data_obj_"+str(i)+".pb", 'rb') as handle:
+            with open(args.checkpoint_path + "dev_query_"+str(args.checkpoint)+"__emb_p__data_obj_"+str(i)+".pb", 'rb') as handle:
                 dev_query_embedding.append(pickle.load(handle))
-            with open(checkpoint_path + "dev_query_"+str(checkpoint)+"__embid_p__data_obj_"+str(i)+".pb", 'rb') as handle:
+            with open(args.checkpoint_path + "dev_query_"+str(args.checkpoint)+"__embid_p__data_obj_"+str(i)+".pb", 'rb') as handle:
                 dev_query_embedding2id.append(pickle.load(handle))
-            with open(checkpoint_path + "passage_"+str(checkpoint)+"__emb_p__data_obj_"+str(i)+".pb", 'rb') as handle:
+            with open(args.checkpoint_path + "passage_"+str(args.checkpoint)+"__emb_p__data_obj_"+str(i)+".pb", 'rb') as handle:
                 passage_embedding.append(pickle.load(handle))
-            with open(checkpoint_path + "passage_"+str(checkpoint)+"__embid_p__data_obj_"+str(i)+".pb", 'rb') as handle:
+            with open(args.checkpoint_path + "passage_"+str(args.checkpoint)+"__embid_p__data_obj_"+str(i)+".pb", 'rb') as handle:
                 passage_embedding2id.append(pickle.load(handle))
         except:
             break
     if (not dev_query_embedding) or (not dev_query_embedding2id) or (not passage_embedding) or not (passage_embedding2id):
-        print("No data found for checkpoint: ",checkpoint)
+        print("No data found for checkpoint: ", args.checkpoint)
 
     dev_query_embedding = np.concatenate(dev_query_embedding, axis=0)
     dev_query_embedding2id = np.concatenate(dev_query_embedding2id, axis=0)
@@ -238,7 +238,7 @@ def main():
             all_dev_I.append(dev_I[0])
         result = EvalDevQuery(dev_query_embedding2id, passage_embedding2id, dev_query_positive_id, all_dev_I, topN)
         final_ndcg, eval_query_cnt, final_Map, final_mrr, final_recall, hole_rate, ms_mrr, Ahole_rate, metrics, prediction = result
-        print("Reranking Results for checkpoint "+str(checkpoint))
+        print("Reranking Results for checkpoint "+str(args.checkpoint))
         print("Reranking NDCG@10:" + str(final_ndcg))
         print("Reranking map@10:" + str(final_Map))
         print("Reranking pytrec_mrr:" + str(final_mrr))
@@ -255,7 +255,7 @@ def main():
     _, dev_I = cpu_index.search(dev_query_embedding, topN)
     result = EvalDevQuery(dev_query_embedding2id, passage_embedding2id, dev_query_positive_id, dev_I, topN)
     final_ndcg, eval_query_cnt, final_Map, final_mrr, final_recall, hole_rate, ms_mrr, Ahole_rate, metrics, prediction = result
-    print("Results for checkpoint "+str(checkpoint))
+    print("Results for checkpoint "+str(args.checkpoint))
     print("NDCG@10:" + str(final_ndcg))
     print("map@10:" + str(final_Map))
     print("pytrec_mrr:" + str(final_mrr))
