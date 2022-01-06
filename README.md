@@ -11,12 +11,10 @@ This repo provides personal implementation of paper [Approximate Nearest Neighbo
 ## TODO List
 - [x] Data download and proprecessing
 - [x] BM25 warmup training
-- [x] ANN data generation (MS MARCO)
-- [x] Model training (MS MARCO)
+- [x] ANN data generation
+- [x] Model training 
 - [x] Model evaluation
 - [x] Model inference
-- [ ] Model training (OpenQA)
-- [ ] ANN data generation (OpenQA)
 - [ ] Config .yaml
 
 ## Environment
@@ -42,10 +40,6 @@ ANCE
         |--doc        # raw data
         |--passage    # raw data
         |--ann_data_* # preprocessed data (*_split* files have been removed)
-    |--NQ_TQA
-        |--checkpoint
-        |--data
-        |--ann_data_* # preprocessed data
 ```
 **Download Dataset**
 ```bash
@@ -62,19 +56,6 @@ python data/msmarco_data.py 
         --max_seq_length {use 512 for ANCE FirstP, 2048 for ANCE MaxP} \ 
         --data_type {use 1 for passage, 0 for document}
 ```
-**OpenQA (NQ | TriviaQA)**
-```bash
-python data/dpr_data.py 
-        --out_data_dir preprocessed_data_dir \ 
-        --model_type dpr \ 
-        --model_name_or_path bert-base-uncased \ 
-        --max_seq_length 256 \ 
-        --data_type {use 2 for both, 1 for trivia, 0 for nq}
-        --question_dir raw_data_dir/raw_qna_question_data
-        --wiki_dir raw_data_dir/wiki_corpus
-        --answer_dir raw_data_dir/raw_qna_answers_data
-```
-
 ## Training
 To train dense retrieval (DR) model(s), e.g. BERT-Siamese, that encodes the query or document to *dense embeddings*. Please start four commands in the following order:
 
