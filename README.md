@@ -47,7 +47,7 @@ python data/msmarco_data.py 
         --max_seq_length {use 512 for ANCE FirstP, 2048 for ANCE MaxP} \ 
         --data_type {use 1 for passage, 0 for document}
 ```
-## Training
+## Trainer
 To train dense retrieval (DR) model(s), e.g. BERT-Siamese, that encodes the query or document to *dense embeddings*. run `train_bm25_warmup.py` to train BM25 model as pretrained model which will be used to generate initial ANN data (step [2]), termed warmup processing. run `train_bert_ance.py` to start train dense retrieval (DR) model with ANCE Negatives sampleing strategy. ANCE training will use the most recently generated ANN data, the command is as follow:**
 ```bash
 python -m torch.distributed.launch --nproc_per_node=1 
@@ -76,7 +76,7 @@ python -m torch.distributed.launch --nproc_per_node=1
         --log_dir ./tensorboard/logs/OSpass
         --data_type {use 1 for passage, 0 for document}
 ```
-## Inference
+## Inferencer
 run `ann_data_gen.py` to initial ANN data generation, this step will use the BM25 generate the initial training data. The command is as follow: Once training starts, start another job in parallel to fetch the latest checkpoint from the ongoing training and update the training data. To do that, run**
 ```bash
 python -m torch.distributed.launch --nproc_per_node=gpu_no 
