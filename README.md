@@ -59,7 +59,7 @@ python data/msmarco_data.py 
 ## Training
 To train dense retrieval (DR) model(s), e.g. BERT-Siamese, that encodes the query or document to *dense embeddings*. Please start four commands in the following order:
 
-**[1]. run `train_bm25_warmup.py` to train BM25 model as pretrained model which will be used to generate initial ANN data (step [2]), termed warmup processing.**
+**[1]. run `train_bm25_warmup.py` to train BM25 model as pretrained model which will be used to generate initial ANN data (step [2]), termed warmup processing. run `train_bert_ance.py` to start train dense retrieval (DR) model with ANCE Negatives sampleing strategy. ANCE training will use the most recently generated ANN data, the command is as follow:**
 ```bash
 python -m torch.distributed.launch --nproc_per_node=1 
         train_bm25_warmup.py \
@@ -87,48 +87,12 @@ python -m torch.distributed.launch --nproc_per_node=1
         --log_dir ./tensorboard/logs/OSpass
         --data_type {use 1 for passage, 0 for document}
 ```
-**[2]. run `ann_data_gen.py` to initial ANN data generation, this step will use the pretrained BM25 warmup checkpoint (step [1]) to generate the initial training data. The command is as follow:**
+**[2]. run `ann_data_gen.py` to initial ANN data generation, this step will use the BM25 generate the initial training data. The command is as follow: Once training starts, start another job in parallel to fetch the latest checkpoint from the ongoing training and update the training data. To do that, run**
 ```bash
 python -m torch.distributed.launch --nproc_per_node=gpu_no 
         ann_data_gen.py \
         --training_dir {model checkpoint location} \ # if it is not existed, it will be pretrained checkpoint location automatically. 
         --init_model_dir {pretrained BM25 warmup checkpoint location} \ 
-        --model_type rdot_nll \
-        --output_dir model_ann_data_dir \
-        --cache_dir model_ann_data_dir_cache \
-        --data_dir preprocessed_data_dir \
-        --max_seq_length 512 \
-        --per_gpu_eval_batch_size 16 \
-        --topk_training {top k candidates for ANN search(ie:200)} \ 
-        --negative_sample {negative samples per query(20)} \ 
-        --end_output_num 0 # only set as 0 for initial data generation, do not set this otherwise
-```
-**[3]. run `train_bert_ance.py` to start train dense retrieval (DR) model with ANCE Negatives sampleing strategy. ANCE training will use the most recently generated ANN data, the command is as follow:**
-```bash
-python -m torch.distributed.launch --nproc_per_node=gpu_no 
-        train_bert_ance.py 
-        --model_type rdot_nll \
-        --model_name_or_path pretrained_model_name {roberta-base, roberta-large, roberta-large-mnli, distilroberta-base, roberta-base-openai-detector, roberta-large-openai-detector} \
-        --task_name MSMarco \
-        --triplet {# default = False, action="store_true", help="Whether to run training}\ 
-        --data_dir preprocessed_data_dir \ # preprocessed data
-        --ann_dir {location of the ANN generated training data} \ 
-        --max_seq_length 512 \
-        --per_gpu_train_batch_size=8 \
-        --gradient_accumulation_steps 2 \
-        --learning_rate 1e-6 \
-        --output_dir model_dir \
-        --warmup_steps 5000 \
-        --logging_steps 100 \
-        --save_steps 10000 \
-        --optimizer lamb 
-```	
-**[4]. Once training starts, start another job in parallel to fetch the latest checkpoint from the ongoing training and update the training data. To do that, run**
-```bash
-python -m torch.distributed.launch --nproc_per_node=gpu_no 
-        ann_data_gen.py \
-        --training_dir {model checkpoint location} \ # if it is not existed, it will be pretrained checkpoint location automatically. 
-        --init_model_dir {pretrained checkpoint location} \ 
         --model_type rdot_nll \
         --output_dir model_ann_data_dir \
         --cache_dir model_ann_data_dir_cache \
