@@ -45,21 +45,20 @@ logger = logging.getLogger(__name__)
 
 def train(args, model, tokenizer, query_cache, passage_cache):
     """ Train the model """
-    logger.info("Training/evaluation parameters %s", args)
     tb_writer = None
     if is_first_worker():
         tb_writer = SummaryWriter(log_dir=args.log_dir)
-
+    # get the whole batch size
     args.train_batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
-    real_batch_size = args.train_batch_size * args.gradient_accumulation_steps * \
-        (torch.distributed.get_world_size() if args.local_rank != -1 else 1)
+    real_batch_size = args.train_batch_size * args.gradient_accumulation_steps * (torch.distributed.get_world_size() if args.local_rank != -1 else 1)
 
+    # get optimizer parameters and set optimizer
     optimizer_grouped_parameters = []
     layer_optim_params = set()
     for layer_name in ["roberta.embeddings", "score_out", "downsample1", "downsample2", "downsample3"]:
         layer = getattr_recursive(model, layer_name)
         if layer is not None:
-            optimizer_grouped_parameters.append({"params": layer.parameters()})
+            optimizer_grouped_parameters.append({"params": layer.parameters()}) # [{"params": layer.parameters()}, ...]
             for p in layer.parameters():
                 layer_optim_params.add(p)
     if getattr_recursive(model, "roberta.encoder.layer") is not None:
@@ -67,7 +66,6 @@ def train(args, model, tokenizer, query_cache, passage_cache):
             optimizer_grouped_parameters.append({"params": layer.parameters()})
             for p in layer.parameters():
                 layer_optim_params.add(p)
-
     optimizer_grouped_parameters.append({"params": [p for p in model.parameters() if p not in layer_optim_params]})
 
     if args.optimizer.lower() == "lamb":
@@ -77,58 +75,28 @@ def train(args, model, tokenizer, query_cache, passage_cache):
     else:
         raise Exception("optimizer {0} not recognized! Can only be lamb or adamW".format(args.optimizer))
 
-    # Check if saved optimizer or scheduler states exist
-    if os.path.isfile(os.path.join(args.model_name_or_path,"optimizer.pt")) and args.load_optimizer_scheduler:
-        # Load in optimizer and scheduler states
-        optimizer.load_state_dict(torch.load(os.path.join(args.model_name_or_path, "optimizer.pt")))
-
+    # Whether to use 16-bit (mixed) precision (through NVIDIA apex) instead of 32-bit to speed up model training and memory cost
     if args.fp16:
         try:
             from apex import amp
         except ImportError:
             raise ImportError(
                 "Please install apex from https://www.github.com/nvidia/apex to use fp16 training.")
-        model, optimizer = amp.initialize(model, optimizer, opt_level=args.fp16_opt_level)
+        model, optimizer = amp.initialize(model, optimizer, opt_level=args.fp16_opt_level) # O0: fp32; O1: mix; O2: fp16, ex bn; O3: fp16
 
     # multi-gpu training (should be after apex fp16 initialization)
     if args.n_gpu > 1:
         model = torch.nn.DataParallel(model)
-
     # Distributed training (should be after apex fp16 initialization)
     if args.local_rank != -1:
-        model = torch.nn.parallel.DistributedDataParallel(
-            model,
-            device_ids=[args.local_rank],
-            output_device=args.local_rank,
-            find_unused_parameters=True,
+        model = torch.nn.parallel.DistributedDataParallel(model,
+                                                          device_ids=[args.local_rank],
+                                                          output_device=args.local_rank,
+                                                          find_unused_parameters=True,
         )
 
-    # Train
-    logger.info("***** Running training *****")
-    logger.info("  Max steps = %d", args.max_steps)
-    logger.info("  Instantaneous batch size per GPU = %d", args.per_gpu_train_batch_size)
-    logger.info(
-        "  Total train batch size (w. parallel, distributed & accumulation) = %d",
-        args.train_batch_size
-        * args.gradient_accumulation_steps
-        * (torch.distributed.get_world_size() if args.local_rank != -1 else 1),
-    )
-    logger.info("  Gradient Accumulation steps = %d", args.gradient_accumulation_steps)
-
+    # initialize model training
     global_step = 0
-    # Check if continuing training from a checkpoint
-    if os.path.exists(args.model_name_or_path):
-        # set global_step to gobal_step of last saved checkpoint from model
-        # path
-        if "-" in args.model_name_or_path:
-            try:
-                global_step = int(args.model_name_or_path.split("-")[-1].split("/")[0])
-            except:
-                global_step=0
-        else:
-            global_step = 0
-        logger.info("  Continuing training from checkpoint, will skip to saved global_step")
-        logger.info("  Continuing training from global step %d", global_step)
 
     tr_loss = 0.0
     model.zero_grad()
@@ -140,10 +108,13 @@ def train(args, model, tokenizer, query_cache, passage_cache):
     train_dataloader_iter = None
     dev_ndcg = 0
     step = 0
-
+    
+    #======================================================================================================================================
     if args.single_warmup:
         scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=args.max_steps)
-
+    '''
+        start model training with max steps
+    '''
     while global_step < args.max_steps:
         if step % args.gradient_accumulation_steps == 0 and global_step % args.logging_steps == 0:
             # check if new ann training data is availabe
@@ -185,27 +156,31 @@ def train(args, model, tokenizer, query_cache, passage_cache):
         try:
             batch = next(train_dataloader_iter)
         except StopIteration:
-            logger.info("Finished iterating current dataset, begin reiterate")
             train_dataloader_iter = iter(train_dataloader)
             batch = next(train_dataloader_iter)
 
         batch = tuple(t.to(args.device) for t in batch)
         step += 1
 
+        # 
         if args.triplet:
             inputs = {
                 "query_ids": batch[0].long(),
                 "attention_mask_q": batch[1].long(),
+
                 "input_ids_a": batch[3].long(),
                 "attention_mask_a": batch[4].long(),
+
                 "input_ids_b": batch[6].long(),
                 "attention_mask_b": batch[7].long()}
         else:
             inputs = {
                 "input_ids_a": batch[0].long(),
                 "attention_mask_a": batch[1].long(),
+
                 "input_ids_b": batch[3].long(),
                 "attention_mask_b": batch[4].long(),
+
                 "labels": batch[6]}
 
         # sync gradients only at gradient accumulation step
@@ -273,58 +248,12 @@ def train(args, model, tokenizer, query_cache, passage_cache):
                 torch.save(optimizer.state_dict(), os.path.join(output_dir, "optimizer.pt"))
                 torch.save(scheduler.state_dict(), os.path.join(output_dir, "scheduler.pt"))
                 logger.info("Saving optimizer and scheduler states to %s", output_dir)
-
+    #======================================================================================================================================
     if args.local_rank == -1 or torch.distributed.get_rank() == 0:
         tb_writer.close()
 
     return global_step
 
-def load_model(args):
-    # Prepare GLUE task
-    args.task_name = args.task_name.lower()
-    args.output_mode = "classification"
-    label_list = ["0", "1"]
-    num_labels = len(label_list)
-
-    # store args
-    if args.local_rank != -1:
-        args.world_size = torch.distributed.get_world_size()
-        args.rank = dist.get_rank()
-
-    # Load pretrained model and tokenizer
-    if args.local_rank not in [-1, 0]:
-        # Make sure only the first process in distributed training will
-        # download model & vocab
-        torch.distributed.barrier()
-
-    args.model_type = args.model_type.lower()
-    configObj = MSMarcoConfigDict[args.model_type]
-    config = configObj.config_class.from_pretrained(
-        args.config_name if args.config_name else args.model_name_or_path,
-        num_labels=num_labels,
-        finetuning_task=args.task_name,
-        cache_dir=args.cache_dir if args.cache_dir else None,
-    )
-    tokenizer = configObj.tokenizer_class.from_pretrained(
-        args.tokenizer_name if args.tokenizer_name else args.model_name_or_path,
-        do_lower_case=args.do_lower_case,
-        cache_dir=args.cache_dir if args.cache_dir else None,
-    )
-    model = configObj.model_class.from_pretrained(
-        args.model_name_or_path,
-        from_tf=bool(".ckpt" in args.model_name_or_path),
-        config=config,
-        cache_dir=args.cache_dir if args.cache_dir else None,
-    )
-
-    if args.local_rank == 0:
-        # Make sure only the first process in distributed training will
-        # download model & vocab
-        torch.distributed.barrier()
-
-    model.to(args.device)
-
-    return tokenizer, model
 
 def save_checkpoint(args, model, tokenizer):
     # Saving best-practices: if you use defaults names for the model, you can
@@ -334,7 +263,6 @@ def save_checkpoint(args, model, tokenizer):
         if not os.path.exists(args.output_dir):
             os.makedirs(args.output_dir)
 
-        logger.info("Saving model checkpoint to %s", args.output_dir)
         # Save a trained model, configuration and tokenizer using `save_pretrained()`.
         # They can then be reloaded using `from_pretrained()`
         model_to_save = (model.module if hasattr(model, "module") else model)  # Take care of distributed/parallel training
@@ -348,20 +276,53 @@ def save_checkpoint(args, model, tokenizer):
     if args.local_rank != -1:
         dist.barrier()
 
+def load_model(args):
+    # Prepare GLUE task
+    args.task_name = args.task_name.lower() # MSMarco
+    args.output_mode = "classification"
+    label_list = ["0", "1"]
+    num_labels = len(label_list)
+
+    # store args
+    if args.local_rank != -1:
+        args.world_size = torch.distributed.get_world_size()
+        args.rank = dist.get_rank()
+    if args.local_rank not in [-1, 0]:
+        # Make sure only the first process in distributed training will
+        # download model & vocab
+        torch.distributed.barrier()
+
+    # model configuration followed by huggingface to load pretrained model and tokenizer
+    args.model_type = args.model_type.lower() # rdot_nll (FirstP) or rdot_nll_multi_chunk (MaxP)
+    configObj = MSMarcoConfigDict[args.model_type]
+    config = configObj.config_class.from_pretrained(args.model_name_or_path,
+                                                    num_labels=num_labels,
+                                                    finetuning_task=args.task_name,
+                                                    cache_dir=None,
+    )
+    tokenizer = configObj.tokenizer_class.from_pretrained(args.model_name_or_path,
+                                                          do_lower_case=args.do_lower_case, # whether transfer words into lower case
+                                                          cache_dir=None,
+    )
+    model = configObj.model_class.from_pretrained(args.model_name_or_path,
+                                                  from_tf=bool(".ckpt" in args.model_name_or_path), 
+                                                  config=config,
+                                                  cache_dir=None,
+    )
+
+    if args.local_rank == 0:
+        # Make sure only the first process in distributed training will
+        # download model & vocab
+        torch.distributed.barrier()
+
+    model.to(args.device)
+
+    return tokenizer, model
+
 def set_env(args):
-    # Setup distant debugging if needed
-    if args.server_ip and args.server_port:
-        # Distant debugging - see
-        # https://code.visualstudio.com/docs/python/debugging#_attach-to-a-local-script
-        import ptvsd
-
-        print("Waiting for debugger attach")
-        ptvsd.enable_attach(address=(args.server_ip, args.server_port), redirect_output=True)
-        ptvsd.wait_for_attach()
-
     # Setup CUDA, GPU & distributed training
-    if args.local_rank == -1 or args.no_cuda:
-        device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
+    if args.local_rank == -1:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         args.n_gpu = torch.cuda.device_count()
     else:  # Initializes the distributed backend which will take care of sychronizing nodes/GPUs
         torch.cuda.set_device(args.local_rank)
@@ -370,80 +331,62 @@ def set_env(args):
         args.n_gpu = 1
     args.device = device
 
-    # Setup logging
-    logging.basicConfig(format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s", 
-                        datefmt="%m/%d/%Y %H:%M:%S", 
-                        level=logging.INFO if args.local_rank in [-1, 0] else logging.WARN,)
-    logger.warning(
-                    "Process rank: %s, device: %s, n_gpu: %s, distributed training: %s, 16-bits training: %s",
-                    args.local_rank,
-                    device,
-                    args.n_gpu,
-                    bool(args.local_rank != -1),
-                    args.fp16,
-    )
-
     # Set seed
     set_seed(args)
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--seed", type=int, default=42, help="random seed for initialization",)
+    parser.add_argument("--task_name", default="MSMarco", type=str, help="The name of the task to train selected in the list: " + ", ".join(processors.keys()),)
     # Required parameters
-    parser.add_argument("--data_dir", default=None, type=str, required=True, help="The input data dir. Should contain the cached passage and query files",)
-    parser.add_argument("--ann_dir", default=None, type=str, required=True, help="The ann training data dir. Should contain the output of ann data generation job",)
-    parser.add_argument("--model_type", default=None, type=str, required=True, help="Model type selected in the list: " + ", ".join(MSMarcoConfigDict.keys()),)
-    parser.add_argument("--model_name_or_path", default=None, type=str, required=True, help="Path to pre-trained model or shortcut name selected in the list: " + ", ".join(ALL_MODELS),)
-    parser.add_argument("--task_name", default=None, type=str, required=True, help="The name of the task to train selected in the list: " + ", ".join(processors.keys()),)
-    parser.add_argument("--output_dir", default=None, type=str, required=True, help="The output directory where the model predictions and checkpoints will be written.",)
-    # Other parameters
-    parser.add_argument("--config_name", default="", type=str, help="Pretrained config name or path if not the same as model_name",)
-    parser.add_argument("--tokenizer_name", default="", type=str, help="Pretrained tokenizer name or path if not the same as model_name",)
-    parser.add_argument("--cache_dir", default="", type=str, help="Where do you want to store the pre-trained models downloaded from s3",)
+    parser.add_argument("--data_dir", default="./data/MSMARCO/preprocessed", type=str, help="The input preprocessed data dir. Should contain the cached passage and query files",)
+    parser.add_argument("--ann_dir", default="./data/ann_data", type=str, help="The ann training data dir. Should contain the output of ann data generation job",)
+    parser.add_argument("--model_type", default="rdot_nll", type=str, help="rdot_nll (FirstP) or rdot_nll_multi_chunk (MaxP)",)
+    parser.add_argument("--output_dir", default="saved", type=str, help="The output directory where the model predictions and checkpoints will be written.",)
+    # pretrained model
+    parser.add_argument("--model_name_or_path", default="roberta-base", type=str, help="Path to pre-trained model or shortcut name selected in the list: " + ", ".join(ALL_MODELS),)
+    parser.add_argument("--do_lower_case", action="store_true", help="Set this flag if you are using an uncased model.",)
+    # training setting
+    parser.add_argument("--triplet", default=False, action="store_true", help="Whether to run training.",)
     parser.add_argument("--max_seq_length", default=128, type=int, help="The maximum total input sequence length after tokenization. \
                                             Sequences longer than this will be truncated, sequences shorter will be padded.",)
     parser.add_argument("--max_query_length", default=64, type=int, help="The maximum total input sequence length after tokenization. \
                                             Sequences longer than this will be truncated, sequences shorter will be padded.",)
-    parser.add_argument("--triplet", default=False, action="store_true", help="Whether to run training.",)
-    parser.add_argument("--do_lower_case", action="store_true", help="Set this flag if you are using an uncased model.",)
-    parser.add_argument("--log_dir", default=None, type=str, help="Tensorboard log dir",)
-    parser.add_argument("--optimizer", default="lamb", type=str, help="Optimizer - lamb or adamW",)
     parser.add_argument("--per_gpu_train_batch_size", default=8, type=int, help="Batch size per GPU/CPU for training.",)
+    parser.add_argument("--warmup_steps", default=0, type=int, help="Linear warmup over warmup_steps.",)
+    parser.add_argument("--max_steps", default=1000000, type=int, help="If > 0: set total number of training steps to perform",)
+    parser.add_argument("--save_steps", type=int, default=500, help="Save checkpoint every X updates steps.",)
+    # optimizer
+    parser.add_argument("--optimizer", default="lamb", type=str, help="Optimizer - lamb or adamW",)
     parser.add_argument("--gradient_accumulation_steps", type=int, default=1, help="Number of updates steps to accumulate before performing a backward/update pass.",)
     parser.add_argument("--learning_rate", default=5e-5, type=float, help="The initial learning rate for Adam.",)
-    parser.add_argument("--weight_decay", default=0.0, type=float, help="Weight decay if we apply some.",)
+    parser.add_argument("--single_warmup", default=False, action="store_true", help="use single or re-warmup",)
     parser.add_argument("--adam_epsilon", default=1e-8, type=float, help="Epsilon for Adam optimizer.",)
     parser.add_argument("--max_grad_norm", default=1.0, type=float, help="Max gradient norm.",)
-    parser.add_argument("--max_steps", default=1000000, type=int, help="If > 0: set total number of training steps to perform",)
-    parser.add_argument("--warmup_steps", default=0, type=int, help="Linear warmup over warmup_steps.",)
+    # log setting
+    parser.add_argument("--log_dir", default=None, type=str, help="Tensorboard log dir",)
     parser.add_argument("--logging_steps", type=int, default=500, help="Log every X updates steps.",)
-    parser.add_argument("--save_steps", type=int, default=500, help="Save checkpoint every X updates steps.",)
-    parser.add_argument("--no_cuda", action="store_true", help="Avoid using CUDA when available",)
-    parser.add_argument("--seed", type=int, default=42, help="random seed for initialization",)
+    # mixed precision
     parser.add_argument("--fp16", action="store_true", help="Whether to use 16-bit (mixed) precision (through NVIDIA apex) instead of 32-bit",)
     parser.add_argument("--fp16_opt_level", type=str, default="O1", help="For fp16: Apex AMP optimization level selected in ['O0', 'O1', 'O2', \
                                                                           and 'O3']. See details at https://nvidia.github.io/apex/amp.html",)
-    # ----------------- ANN HyperParam -------------------
-    parser.add_argument("--load_optimizer_scheduler", default=False, action="store_true", help="load scheduler from checkpoint or not",)
-    parser.add_argument("--single_warmup", default=False, action="store_true", help="use single or re-warmup",)
-    # ----------------- End of Doc Ranking HyperParam ----
+    # dis setting
     parser.add_argument("--local_rank", type=int, default=-1, help="For distributed training: local_rank",)
-    parser.add_argument("--server_ip", type=str, default="", help="For distant debugging.",)
-    parser.add_argument("--server_port", type=str, default="", help="For distant debugging.",)
 
     args = parser.parse_args()
     
     # -----------------------------------------------------
-    set_env(args)
+    set_env(args) # set run env and reproducible seed
     tokenizer, model = load_model(args)
-
+    # query 
     query_collection_path = os.path.join(args.data_dir, "train-query")
     query_cache = EmbeddingCache(query_collection_path)
+    # passages
     passage_collection_path = os.path.join(args.data_dir, "passages")
     passage_cache = EmbeddingCache(passage_collection_path)
 
     with query_cache, passage_cache:
         global_step = train(args, model, tokenizer, query_cache, passage_cache)
-        logger.info(" global_step = %s", global_step)
 
     save_checkpoint(args, model, tokenizer)
 

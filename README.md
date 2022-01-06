@@ -108,7 +108,7 @@ python -m torch.distributed.launch --nproc_per_node=gpu_no 
 python -m torch.distributed.launch --nproc_per_node=gpu_no 
         train_bert_ance.py 
         --model_type rdot_nll \
-        --model_name_or_path pretrained_checkpoint_dir \
+        --model_name_or_path pretrained_model_name {roberta-base, roberta-large, roberta-large-mnli, distilroberta-base, roberta-base-openai-detector, roberta-large-openai-detector} \
         --task_name MSMarco \
         --triplet {# default = False, action="store_true", help="Whether to run training}\ 
         --data_dir preprocessed_data_dir \ # preprocessed data

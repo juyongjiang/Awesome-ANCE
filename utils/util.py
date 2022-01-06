@@ -68,8 +68,8 @@ class InputFeaturesPair(object):
 
 def getattr_recursive(obj, name):
     for layer in name.split("."):
-        if hasattr(obj, layer):
-            obj = getattr(obj, layer)
+        if hasattr(obj, layer): # judge whether obj exist attr (layer)
+            obj = getattr(obj, layer) # get the value of layer
         else:
             return None
     return obj
@@ -230,11 +230,13 @@ class EmbeddingCache:
         self.base_path = base_path
         with open(base_path + '_meta', 'r') as f:
             meta = json.load(f)
-            self.dtype = np.dtype(meta['type'])
+            self.dtype = np.dtype(meta['type']) # "int32"
             self.total_number = meta['total_number']
-            self.record_size = int(meta['embedding_size']) * self.dtype.itemsize + 4
+            # the size of single record: passage_len, passage, stored by bytes
+            self.record_size = int(meta['embedding_size']) * self.dtype.itemsize + 4 # dtype.itemsize = 4
+        
         if seed >= 0:
-            self.ix_array = np.random.RandomState(seed).permutation(self.total_number)
+            self.ix_array = np.random.RandomState(seed).permutation(self.total_number) # generate random list shuffle([i for i in range(total_number)])
         else:
             self.ix_array = np.arange(self.total_number)
         self.f = None
@@ -246,9 +248,10 @@ class EmbeddingCache:
         self.f.close()
 
     def read_single_record(self):
-        record_bytes = self.f.read(self.record_size)
+        record_bytes = self.f.read(self.record_size) # read record_size bytes
         passage_len = int.from_bytes(record_bytes[:4], 'big')
         passage = np.frombuffer(record_bytes[4:], dtype=self.dtype)
+        print(passage_len, passage)
         return passage_len, passage
 
     def __enter__(self):
@@ -260,9 +263,8 @@ class EmbeddingCache:
 
     def __getitem__(self, key):
         if key < 0 or key > self.total_number:
-            raise IndexError(
-                "Index {} is out of bound for cached embeddings of size {}".format(key, self.total_number))
-        self.f.seek(key * self.record_size)
+            raise IndexError("Index {} is out of bound for cached embeddings of size {}".format(key, self.total_number))
+        self.f.seek(key * self.record_size) # offset
         return self.read_single_record()
 
     def __iter__(self):
