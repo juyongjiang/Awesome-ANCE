@@ -1,7 +1,7 @@
 import sys
 import torch
 import os
-import faiss ##
+import faiss ## generate new ann index [qid, pos_id, neg_id]
 import numpy as np
 import argparse
 import json

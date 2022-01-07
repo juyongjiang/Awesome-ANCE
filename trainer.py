@@ -163,6 +163,7 @@ def train(args, model, tokenizer, query_cache, passage_cache):
                 else:
                     train_dataset = StreamingDataset(ann_training_data, GetTrainingDataProcessingFn(args, query_cache, passage_cache))
                 train_dataloader = DataLoader(train_dataset, batch_size=args.train_batch_size)
+                # manually set it as iter which reture generator itself and next to get next batch data
                 train_dataloader_iter = iter(train_dataloader)
                 
                 ###
@@ -196,8 +197,18 @@ def train(args, model, tokenizer, query_cache, passage_cache):
                 Usually  ``1`` for tokens that are NOT MASKED, ``0`` for MASKED (padded) tokens.
             token_type_ids: Segment token indices to indicate first and second portions of the inputs.
             label: Label corresponding to the input
+        if triplet:
+            (query_data[0], query_data[1], query_data[2], # content, mask, segment
+             pos_data[0], pos_data[1], pos_data[2],
+             neg_data[0], neg_data[1], neg_data[2]) 
+             # qid, pos_pid, and neg_pid are not needed. 
+        else:
+            (query_data[0], query_data[1], query_data[2], pos_data[0], pos_data[1], pos_data[2], pos_label) 
+            or
+            (query_data[0], query_data[1], query_data[2], neg_data[0], neg_data[1], neg_data[2], neg_label)
         """
-        if args.triplet:
+        # we don't use segment, so we treat query and passage are the same.
+        if args.triplet: 
             inputs = {"query_ids": batch[0].long(),   "attention_mask_q": batch[1].long(),
                       "input_ids_a": batch[3].long(), "attention_mask_a": batch[4].long(),
                       "input_ids_b": batch[6].long(), "attention_mask_b": batch[7].long()}
@@ -402,7 +413,7 @@ def main():
     parser.add_argument("--model_name_or_path", default="roberta-base", type=str, help="Path to pre-trained model or shortcut name selected in the list: " + ", ".join(ALL_MODELS),)
     parser.add_argument("--do_lower_case", action="store_true", help="Set this flag if you are using an uncased model.",)
     # training setting
-    parser.add_argument("--triplet", default=False, action="store_true", help="Whether to run training.",)
+    parser.add_argument("--triplet", default=True, help="Whether to run training with (q, p_pos, p_neg).",)
     parser.add_argument("--max_seq_length", default=512, type=int, help="The maximum total input sequence length after tokenization. \
                                             Sequences longer than this will be truncated, sequences shorter will be padded.",)
     parser.add_argument("--max_query_length", default=64, type=int, help="The maximum total input sequence length after tokenization. \

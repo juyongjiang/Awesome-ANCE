@@ -16,7 +16,9 @@ from torch.utils.data import DataLoader, Dataset, TensorDataset, IterableDataset
 
 from os import listdir
 from os.path import isfile, join
-
+'''
+    Data Preprocessing
+'''
 def write_query_rel(args, pid2offset, query_file, positive_id_file, out_query_file, out_id_file):
     print("Writing query files " + str(out_query_file) + " and " + str(out_id_file))
     query_positive_id = set()
@@ -191,31 +193,46 @@ def QueryPreprocessingFn(args, line, tokenizer):
 
     return q_id.to_bytes(8,'big') + passage_len.to_bytes(4,'big') + np.array(input_id_b,np.int32).tobytes()
 
+###################################################################################
+'''
+    DataLoad Generation
+'''
 def GetProcessingFn(args, query=False):
-    def fn(vals, i):
+    def fn(vals, i): # i: id
         passage_len, passage = vals
         max_len = args.max_query_length if query else args.max_seq_length
-
+        """
+        Args:
+            input_ids: Indices of input sequence tokens in the vocabulary.
+            attention_mask: Mask to avoid performing attention on padding token indices.
+                Mask values selected in ``[0, 1]``:
+                Usually  ``1`` for tokens that are NOT MASKED, ``0`` for MASKED (padded) tokens.
+            token_type_ids: Segment token indices to indicate first and second portions of the inputs.
+            label: Label corresponding to the input
+        """
         pad_len = max(0, max_len - passage_len)
         token_type_ids = ([0] if query else [1]) * passage_len + [0] * pad_len
         attention_mask = [1] * passage_len + [0] * pad_len
+        # id, passage_each_token_id, [1,1,1, ..., 0,0,0], [0,0,0, ..., 0,0,0]/[1,1,1, ..., 0,0,0]
+        passage_collection = [(i, passage, attention_mask, token_type_ids)] 
 
-        passage_collection = [(i, passage, attention_mask, token_type_ids)]
-
-        query2id_tensor = torch.tensor([f[0] for f in passage_collection], dtype=torch.long)
-        all_input_ids_a = torch.tensor([f[1] for f in passage_collection], dtype=torch.int)
-        all_attention_mask_a = torch.tensor([f[2] for f in passage_collection], dtype=torch.bool)
-        all_token_type_ids_a = torch.tensor([f[3] for f in passage_collection], dtype=torch.uint8)
-
+        # change input into torch.tensor format
+        query2id_tensor = torch.tensor([f[0] for f in passage_collection], dtype=torch.long) # [id]
+        all_input_ids_a = torch.tensor([f[1] for f in passage_collection], dtype=torch.int) # [passage_each_token_id]
+        all_attention_mask_a = torch.tensor([f[2] for f in passage_collection], dtype=torch.bool) # [1,1,1, ..., 0,0,0]
+        all_token_type_ids_a = torch.tensor([f[3] for f in passage_collection], dtype=torch.uint8) # [0,0,0, ..., 0,0,0]/[1,1,1, ..., 0,0,0]
+        # passage_each_token_id, [1,1,1, ..., 0,0,0], [0,0,0, ..., 0,0,0]/[1,1,1, ..., 0,0,0], id
+        # zip a, b, c, d, https://blog.csdn.net/qq_40211493/article/details/107529148
         dataset = TensorDataset(all_input_ids_a, all_attention_mask_a, all_token_type_ids_a, query2id_tensor)
 
-        return [ts for ts in dataset]
+        return [ts for ts in dataset] # [[a,b,c,d], ...]
 
     return fn
 
 def GetTrainingDataProcessingFn(args, query_cache, passage_cache):
     def fn(line, i):
         line_arr = line.split('\t')
+        
         qid = int(line_arr[0])
         pos_pid = int(line_arr[1])
         neg_pids = line_arr[2].split(',')
@@ -238,24 +255,26 @@ def GetTrainingDataProcessingFn(args, query_cache, passage_cache):
     return fn
 
 def GetTripletTrainingDataProcessingFn(args, query_cache, passage_cache):
+    # query_cache: [(len, [id1, id2, id3, ....., 1, 1, 1, 1]), ...]
+    # passage_cache: [(len, [id1, id2, id3, ....., 1, 1, 1, 1]), ...]
     def fn(line, i): # ann data: for i, line in enumerate(ann_data.readlines())
         line_arr = line.split('\t')
+        # qid, pos_pid, neg_pids (token index in the dictionary)
         qid = int(line_arr[0])
         pos_pid = int(line_arr[1])
-
         neg_pids = line_arr[2].split(',')
         neg_pids = [int(neg_pid) for neg_pid in neg_pids]
 
         all_input_ids_a = []
         all_attention_mask_a = []
 
-        query_data = GetProcessingFn(args, query=True)(query_cache[qid], qid)[0]
+        query_data = GetProcessingFn(args, query=True)(query_cache[qid], qid)[0] # [a,b,c,d]
         pos_data = GetProcessingFn(args, query=False)(passage_cache[pos_pid], pos_pid)[0]
 
         for neg_pid in neg_pids:
             neg_data = GetProcessingFn(args, query=False)(passage_cache[neg_pid], neg_pid)[0]
             yield (query_data[0], query_data[1], query_data[2], pos_data[0], pos_data[1], pos_data[2],
-                   neg_data[0], neg_data[1], neg_data[2])
+                   neg_data[0], neg_data[1], neg_data[2]) # qid, pos_pid, and neg_pid are not needed. 
 
     return fn
 

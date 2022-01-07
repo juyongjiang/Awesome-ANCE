@@ -200,7 +200,6 @@ class EmbeddingCache:
         record_bytes = self.f.read(self.record_size) # read record_size bytes
         passage_len = int.from_bytes(record_bytes[:4], 'big')
         passage = np.frombuffer(record_bytes[4:], dtype=self.dtype)
-        print(passage_len, passage)
         return passage_len, passage
 
     def __enter__(self):
