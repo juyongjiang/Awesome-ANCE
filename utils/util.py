@@ -164,6 +164,7 @@ def get_latest_ann_data(ann_data_path): # ann_dir
         return data_no, os.path.join(ann_data_path, "ann_training_data_" + str(data_no)), ndcg_json
     return -1, None, None
 
+# out_passage_path, 32, 8 + 4 + args.max_seq_length * 4
 def numbered_byte_file_generator(base_path, file_no, record_size):
     for i in range(file_no):
         with open('{}_split{}'.format(base_path, i), 'rb') as f:
@@ -244,18 +245,21 @@ class StreamingDataset(IterableDataset):
             records = self.fn(element, i)
             for rec in records:
                 yield rec
-
+# input the doc then use tokenizer to split each word id
 def tokenize_to_file(args, i, num_process, in_path, out_path, line_fn):
-    configObj = MSMarcoConfigDict[args.model_type]
-    tokenizer = configObj.tokenizer_class.from_pretrained(args.model_name_or_path, do_lower_case=True, cache_dir=None,)
+    configObj = MSMarcoConfigDict[args.model_type] # rdot_nll
+    tokenizer = configObj.tokenizer_class.from_pretrained(args.model_name_or_path, do_lower_case=args.do_lower_case, cache_dir=None,)
 
     with open(in_path, 'r', encoding='utf-8') if in_path[-2:] != "gz" else gzip.open(in_path, 'rt', encoding='utf8') as in_f,\
-            open('{}_split{}'.format(out_path, i), 'wb') as out_f:
+            open('{}_split{}'.format(out_path, i), 'wb') as out_f: # i is the index of processing
         for idx, line in enumerate(in_f):
-            if idx % num_process != i:
+            if idx % num_process != i: # distribute file to correspoinding processing
                 continue
+            # transfer each line to "p_id.to_bytes(8, 'big') + passage_len.to_bytes(4, 'big') + 
+            # content=np.array(input_id_b, np.int32).tobytes(): max length"
             out_f.write(line_fn(args, line, tokenizer))
 
+# multiple processing operation 
 def multi_file_process(args, num_process, in_path, out_path, line_fn):
     processes = []
     for i in range(num_process):
