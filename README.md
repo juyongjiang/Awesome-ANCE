@@ -52,19 +52,22 @@ To train dense retrieval (DR) model(s), e.g. BERT-Siamese, that encodes the quer
 ```bash
 python -m torch.distributed.launch --nproc_per_node=1 
         train_bm25_warmup.py \
-        --train_model_type rdot_nll \
-        --model_name_or_path roberta-base \
         --task_name MSMarco \
+        --model_type rdot_nll \
+        --model_name_or_path roberta-base \
+        --data_dir {location of your preprocessed data}  
+        --ann_dir {location of the ANN generated training data}
+        --output_dir {location for checkpoint saving} \
+
         --do_train \
         --evaluate_during_training \
-        --data_dir {location of your raw data}  # raw data
+
         --max_seq_length 128 
         --per_gpu_eval_batch_size=256 \
         --per_gpu_train_batch_size=32 \
         --learning_rate 2e-4  \
         --logging_steps 100   \
         --num_train_epochs 2.0  \
-        --output_dir {location for checkpoint saving} \
         --warmup_steps 1000  \
         --overwrite_output_dir \
         --save_steps 30000 \

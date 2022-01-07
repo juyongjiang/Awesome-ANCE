@@ -406,6 +406,7 @@ def main():
     parser.add_argument("--save_steps", type=int, default=500, help="Save checkpoint every X updates steps.",)
     # optimizer
     parser.add_argument("--optimizer", default="lamb", type=str, help="Optimizer - lamb or adamW",)
+    parser.add_argument("--load_optimizer_scheduler", default=False, action="store_true", help="load scheduler from checkpoint or not",)
     parser.add_argument("--gradient_accumulation_steps", type=int, default=1, help="Number of updates steps to accumulate before performing a backward/update pass.",)
     parser.add_argument("--learning_rate", default=5e-5, type=float, help="The initial learning rate for Adam.",)
     parser.add_argument("--single_warmup", default=False, action="store_true", help="use single or re-warmup",)
