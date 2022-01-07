@@ -22,6 +22,7 @@ from utils.util import (
     is_first_worker
 )
 from utils.lamb import Lamb
+from utils.eval_mrr import passage_dist_eval
 from model.models import MSMarcoConfigDict, ALL_MODELS
 ##
 from transformers import glue_processors as processors
@@ -364,30 +365,13 @@ def set_env(args):
         args.n_gpu = 1
     args.device = device
 
-    logging.basicConfig(filename=os.path.join(arg.log_dir, "train_ance.log"),
+    logging.basicConfig(filename=os.path.join(args.log_dir, "train_ance.log"),
                         format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s",
                         datefmt="%m/%d/%Y %H:%M:%S",
                         level=logging.INFO if args.local_rank in [-1, 0] else logging.WARN, # only in rank 0 to print logging.INFO
     )
     # Set seed
     set_seed(args)
-
-def evaluation(args, model, tokenizer):
-    # Evaluation
-    results = {}
-    if args.do_eval:
-        model_dir = args.model_name_or_path if args.model_name_or_path else args.output_dir
-        checkpoints = [model_dir]
-        for checkpoint in checkpoints:
-            global_step = checkpoint.split("-")[-1] if len(checkpoints) > 1 else ""
-            prefix = checkpoint.split("/")[-1] if checkpoint.find("checkpoint") != -1 else ""
-
-            model.eval()
-            reranking_mrr, full_ranking_mrr = passage_dist_eval(args, model, tokenizer)
-            if is_first_worker():
-                print("Reranking/Full ranking mrr: {0}/{1}".format(str(reranking_mrr), str(full_ranking_mrr)))
-            dist.barrier()
-    return results
 
 def main():
     parser = argparse.ArgumentParser()
@@ -457,11 +441,9 @@ def main():
         global_step = train(args, model, tokenizer, query_cache, passage_cache)
 
     '''
-        Step 4: Model Save and Evaluation
+        Step 4: Model Save
     '''
     save_checkpoint(args, model, tokenizer)
-    results = evaluation(args, model, tokenizer)
-    print("Model Evaluation Results: ", results)
-
+    
 if __name__ == "__main__":
     main()
