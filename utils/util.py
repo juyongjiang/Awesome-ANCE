@@ -24,47 +24,7 @@ from torch.utils.data import DataLoader, Dataset, TensorDataset, IterableDataset
 import re
 from model.models import MSMarcoConfigDict, ALL_MODELS
 from typing import List, Set, Dict, Tuple, Callable, Iterable, Any
-
-
 logger = logging.getLogger(__name__)
-
-
-class InputFeaturesPair(object):
-    """
-    A single set of features of data.
-
-    Args:
-        input_ids: Indices of input sequence tokens in the vocabulary.
-        attention_mask: Mask to avoid performing attention on padding token indices.
-            Mask values selected in ``[0, 1]``:
-            Usually  ``1`` for tokens that are NOT MASKED, ``0`` for MASKED (padded) tokens.
-        token_type_ids: Segment token indices to indicate first and second portions of the inputs.
-        label: Label corresponding to the input
-    """
-
-    def __init__(self, input_ids_a, attention_mask_a=None, token_type_ids_a=None, input_ids_b=None, attention_mask_b=None, token_type_ids_b=None, label=None):
-        self.input_ids_a = input_ids_a
-        self.attention_mask_a = attention_mask_a
-        self.token_type_ids_a = token_type_ids_a
-
-        self.input_ids_b = input_ids_b
-        self.attention_mask_b = attention_mask_b
-        self.token_type_ids_b = token_type_ids_b
-
-        self.label = label
-
-    def __repr__(self):
-        return str(self.to_json_string())
-
-    def to_dict(self):
-        """Serializes this instance to a Python dictionary."""
-        output = copy.deepcopy(self.__dict__)
-        return output
-
-    def to_json_string(self):
-        """Serializes this instance to a JSON string."""
-        return json.dumps(self.to_dict(), indent=2, sort_keys=True) + "\n"
-
 
 def getattr_recursive(obj, name):
     for layer in name.split("."):
@@ -74,11 +34,9 @@ def getattr_recursive(obj, name):
             return None
     return obj
 
-
 def barrier_array_merge(args, data_array, merge_axis=0, prefix="", load_cache=False, only_load_in_master=False):
     # data array: [B, any dimension]
     # merge alone one axis
-
     if args.local_rank == -1:
         return data_array
 
@@ -120,7 +78,6 @@ def barrier_array_merge(args, data_array, merge_axis=0, prefix="", load_cache=Fa
     dist.barrier()
     return data_array_agg
 
-
 def pad_input_ids(input_ids, max_length, pad_on_left=False, pad_token=0):
     padding_length = max_length - len(input_ids)
     padding_id = [pad_token] * padding_length
@@ -134,7 +91,6 @@ def pad_input_ids(input_ids, max_length, pad_on_left=False, pad_token=0):
             input_ids = input_ids + padding_id
 
     return input_ids
-
 
 def pad_ids(input_ids, attention_mask, token_type_ids, max_length,
             pad_on_left=False,
@@ -162,11 +118,9 @@ def pad_ids(input_ids, attention_mask, token_type_ids, max_length,
 
     return input_ids, attention_mask, token_type_ids
 
-
 # to reuse pytrec_eval, id must be string
 def convert_to_string_id(result_dict):
     string_id_dict = {}
-
     # format [string, dict[string, val]]
     for k, v in result_dict.items():
         _temp_v = {}
@@ -177,7 +131,6 @@ def convert_to_string_id(result_dict):
 
     return string_id_dict
 
-
 def set_seed(args):
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -185,26 +138,24 @@ def set_seed(args):
     if args.n_gpu > 0:
         torch.cuda.manual_seed_all(args.seed)
 
-
 def is_first_worker():
     return not dist.is_available() or not dist.is_initialized() or dist.get_rank() == 0
 
-
 def concat_key(all_list, key, axis=0):
     return np.concatenate([ele[key] for ele in all_list], axis=axis)
-
 
 def get_checkpoint_no(checkpoint_path):
     nums = re.findall(r'\d+', checkpoint_path)
     return int(nums[-1]) if len(nums) > 0 else 0
 
-
-def get_latest_ann_data(ann_data_path):
+def get_latest_ann_data(ann_data_path): # ann_dir
     ANN_PREFIX = "ann_ndcg_"
     if not os.path.exists(ann_data_path):
+        print("%s is not existed" % ann_data_path)
         return -1, None, None
     files = list(next(os.walk(ann_data_path))[2])
     num_start_pos = len(ANN_PREFIX)
+    # sequence of ann data with ann_ndcg_[data_no], [data_no] represents which time it generates.
     data_no_list = [int(s[num_start_pos:]) for s in files if s[:num_start_pos] == ANN_PREFIX]
     if len(data_no_list) > 0:
         data_no = max(data_no_list)
@@ -212,7 +163,6 @@ def get_latest_ann_data(ann_data_path):
             ndcg_json = json.load(f)
         return data_no, os.path.join(ann_data_path, "ann_training_data_" + str(data_no)), ndcg_json
     return -1, None, None
-
 
 def numbered_byte_file_generator(base_path, file_no, record_size):
     for i in range(file_no):
@@ -223,7 +173,6 @@ def numbered_byte_file_generator(base_path, file_no, record_size):
                     # eof
                     break
                 yield b
-
 
 class EmbeddingCache:
     def __init__(self, base_path, seed=-1):
@@ -276,7 +225,6 @@ class EmbeddingCache:
     def __len__(self):
         return self.total_number
 
-
 class StreamingDataset(IterableDataset):
     def __init__(self, elements, fn, distributed=True):
         super().__init__()
@@ -298,7 +246,6 @@ class StreamingDataset(IterableDataset):
             for rec in records:
                 yield rec
 
-
 def tokenize_to_file(args, i, num_process, in_path, out_path, line_fn):
     configObj = MSMarcoConfigDict[args.model_type]
     tokenizer = configObj.tokenizer_class.from_pretrained(args.model_name_or_path, do_lower_case=True, cache_dir=None,)
@@ -310,7 +257,6 @@ def tokenize_to_file(args, i, num_process, in_path, out_path, line_fn):
                 continue
             out_f.write(line_fn(args, line, tokenizer))
 
-
 def multi_file_process(args, num_process, in_path, out_path, line_fn):
     processes = []
     for i in range(num_process):
@@ -319,7 +265,6 @@ def multi_file_process(args, num_process, in_path, out_path, line_fn):
         p.start()
     for p in processes:
         p.join()
-
 
 def all_gather(data):
     """

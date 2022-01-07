@@ -1,8 +1,19 @@
 import sys
-sys.path += ['../']
 import torch
 import os
-import faiss
+import faiss ##
+import numpy as np
+import argparse
+import json
+import logging
+import random
+import time
+import pytrec_eval ##
+import csv
+import copy
+import transformers
+import torch.distributed as dist
+##
 from utils.util import (
     barrier_array_merge,
     convert_to_string_id,
@@ -12,9 +23,9 @@ from utils.util import (
     get_checkpoint_no,
     get_latest_ann_data
 )
-import csv
-import copy
-import transformers
+from data.msmarco_data import GetProcessingFn  
+from model.models import MSMarcoConfigDict, ALL_MODELS
+##
 from transformers import (
     AdamW,
     RobertaConfig,
@@ -23,31 +34,17 @@ from transformers import (
     get_linear_schedule_with_warmup,
     RobertaModel,
 )
-from data.msmarco_data import GetProcessingFn  
-from model.models import MSMarcoConfigDict, ALL_MODELS
 from torch import nn
-import torch.distributed as dist
 from tqdm import tqdm, trange
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, TensorDataset
-import numpy as np
 from os.path import isfile, join
-import argparse
-import json
-import logging
-import random
-import time
-import pytrec_eval
-
 torch.multiprocessing.set_sharing_strategy('file_system')
-logger = logging.getLogger(__name__)
-
-# ANN - active learning ------------------------------------------------------
 
 try:
     from torch.utils.tensorboard import SummaryWriter
 except ImportError:
     from tensorboardX import SummaryWriter
-
+logger = logging.getLogger(__name__)
 
 def get_latest_checkpoint(args):
     if not os.path.exists(args.training_dir):
@@ -64,7 +61,6 @@ def get_latest_checkpoint(args):
     if len(checkpoint_nums) > 0:
         return os.path.join(args.training_dir, "checkpoint-" + str(max(checkpoint_nums))) + "/", max(checkpoint_nums)
     return args.init_model_dir, 0
-
 
 def load_positive_ids(args):
     logger.info("Loading query_2_pos_docid")
@@ -93,29 +89,25 @@ def load_positive_ids(args):
 
     return training_query_positive_id, dev_query_positive_id
 
-
 def load_model(args, checkpoint_path):
     label_list = ["0", "1"]
     num_labels = len(label_list)
     args.model_type = args.model_type.lower()
     configObj = MSMarcoConfigDict[args.model_type]
     args.model_name_or_path = checkpoint_path
-    config = configObj.config_class.from_pretrained(
-        args.config_name if args.config_name else args.model_name_or_path,
-        num_labels=num_labels,
-        finetuning_task="MSMarco",
-        cache_dir=args.cache_dir if args.cache_dir else None,
+    config = configObj.config_class.from_pretrained(args.model_name_or_path,
+                                                    num_labels=num_labels,
+                                                    finetuning_task="MSMarco",
+                                                    cache_dir=args.cache_dir if args.cache_dir else None,
     )
-    tokenizer = configObj.tokenizer_class.from_pretrained(
-        args.tokenizer_name if args.tokenizer_name else args.model_name_or_path,
-        do_lower_case=True,
-        cache_dir=args.cache_dir if args.cache_dir else None,
+    tokenizer = configObj.tokenizer_class.from_pretrained(args.model_name_or_path,
+                                                          do_lower_case=True,
+                                                          cache_dir=args.cache_dir if args.cache_dir else None,
     )
-    model = configObj.model_class.from_pretrained(
-        args.model_name_or_path,
-        from_tf=bool(".ckpt" in args.model_name_or_path),
-        config=config,
-        cache_dir=args.cache_dir if args.cache_dir else None,
+    model = configObj.model_class.from_pretrained(args.model_name_or_path,
+                                                  from_tf=bool(".ckpt" in args.model_name_or_path),
+                                                  config=config,
+                                                  cache_dir=args.cache_dir if args.cache_dir else None,
     )
     model.to(args.device)
     logger.info("Inference parameters %s", args)
@@ -128,7 +120,6 @@ def load_model(args, checkpoint_path):
         )
     return config, tokenizer, model
 
-
 def InferenceEmbeddingFromStreamDataLoader(args, model, train_dataloader, is_query_inference=True, prefix=""):
     # expect dataset from ReconstructTrainingSet
     results = {}
@@ -136,7 +127,7 @@ def InferenceEmbeddingFromStreamDataLoader(args, model, train_dataloader, is_que
 
     # Inference!
     logger.info("***** Running ANN Embedding Inference *****")
-    logger.info("  Batch size = %d", eval_batch_size)
+    logger.info("Batch size = %d", eval_batch_size)
 
     embedding = []
     embedding2id = []
@@ -171,7 +162,6 @@ def InferenceEmbeddingFromStreamDataLoader(args, model, train_dataloader, is_que
     embedding2id = np.concatenate(embedding2id, axis=0)
     return embedding, embedding2id
 
-
 # streaming inference
 def StreamInferenceDoc(args, model, fn, prefix, f, is_query_inference=True):
     inference_batch_size = args.per_gpu_eval_batch_size  # * max(1, args.n_gpu)
@@ -195,7 +185,6 @@ def StreamInferenceDoc(args, model, fn, prefix, f, is_query_inference=True):
     full_embedding2id = barrier_array_merge(args, _embedding2id, prefix=prefix + "_embid_p_", load_cache=False, only_load_in_master=True)
 
     return full_embedding, full_embedding2id
-
 
 def generate_new_ann(args, output_num, checkpoint_path, training_query_positive_id, dev_query_positive_id, latest_step_num):
     config, tokenizer, model = load_model(args, checkpoint_path)
@@ -270,7 +259,7 @@ def generate_new_ann(args, output_num, checkpoint_path, training_query_positive_
                                                             effective_q_id)
 
         logger.info("***** Construct ANN Triplet *****")
-        train_data_output_path = os.path.join(args.output_dir, "ann_training_data_" + str(output_num))
+        train_data_output_path = os.path.join(args.ann_dir, "ann_training_data_" + str(output_num))
 
         with open(train_data_output_path, 'w') as f:
             query_range = list(range(I.shape[0]))
@@ -282,12 +271,11 @@ def generate_new_ann(args, output_num, checkpoint_path, training_query_positive_
                 pos_pid = training_query_positive_id[query_id]
                 f.write("{}\t{}\t{}\n".format(query_id, pos_pid, ','.join(str(neg_pid) for neg_pid in query_negative_passage[query_id])))
 
-        ndcg_output_path = os.path.join(args.output_dir, "ann_ndcg_" + str(output_num))
+        ndcg_output_path = os.path.join(args.ann_dir, "ann_ndcg_" + str(output_num))
         with open(ndcg_output_path, 'w') as f:
             json.dump({'ndcg': dev_ndcg, 'checkpoint': checkpoint_path}, f)
 
         return dev_ndcg, num_queries_dev
-
 
 def GenerateNegativePassaageID(args, query_embedding2id, passage_embedding2id, training_query_positive_id, I_nearest_neighbor, effective_q_id):
     query_negative_passage = {}
@@ -340,7 +328,6 @@ def GenerateNegativePassaageID(args, query_embedding2id, passage_embedding2id, t
 
     return query_negative_passage
 
-
 def EvalDevQuery(args, query_embedding2id, passage_embedding2id, dev_query_positive_id, I_nearest_neighbor):
     # [qid][docid] = docscore, here we use -rank as score, so the higher the rank (1 > 2), the higher the score (-1 > -2)
     prediction = {}
@@ -378,54 +365,22 @@ def EvalDevQuery(args, query_embedding2id, passage_embedding2id, dev_query_posit
 
     return final_ndcg, eval_query_cnt
 
-def set_env(args):
-    # Setup CUDA, GPU & distributed training
-    if args.local_rank == -1 or args.no_cuda:
-        device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
-        args.n_gpu = torch.cuda.device_count()
-    else:  # Initializes the distributed backend which will take care of sychronizing nodes/GPUs
-        torch.cuda.set_device(args.local_rank)
-        device = torch.device("cuda", args.local_rank)
-        torch.distributed.init_process_group(backend="nccl")
-        args.n_gpu = 1
-    args.device = device
-
-    # store args
-    if args.local_rank != -1:
-        args.world_size = torch.distributed.get_world_size()
-        args.rank = dist.get_rank()
-
-    # Setup logging
-    logging.basicConfig(
-        format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s",
-        datefmt="%m/%d/%Y %H:%M:%S",
-        level=logging.INFO if args.local_rank in [-1, 0] else logging.WARN,
-    )
-    logger.warning(
-        "Process rank: %s, device: %s, n_gpu: %s, distributed training: %s",
-        args.local_rank,
-        device,
-        args.n_gpu,
-        bool(args.local_rank != -1),
-    )
-
-
 def ann_data_gen(args):
     last_checkpoint = args.last_checkpoint_dir
-    ann_no, ann_path, ndcg_json = get_latest_ann_data(args.output_dir)
+    # get latest ann data
+    ann_no, ann_path, ndcg_json = get_latest_ann_data(args.ann_dir)
     output_num = ann_no + 1
 
-    logger.info("starting output number %d", output_num)
-
     if is_first_worker():
-        if not os.path.exists(args.output_dir):
-            os.makedirs(args.output_dir)
+        if not os.path.exists(args.ann_dir):
+            os.makedirs(args.ann_dir)
         if not os.path.exists(args.cache_dir):
             os.makedirs(args.cache_dir)
-
+    # positive id for train and dev dataset
     training_positive_id, dev_positive_id = load_positive_ids(args)
 
     while args.end_output_num == -1 or output_num <= args.end_output_num:
+        # get latest DR model checkpoint
         next_checkpoint, latest_step_num = get_latest_checkpoint(args)
 
         if args.only_keep_latest_embedding_file:
@@ -436,45 +391,71 @@ def ann_data_gen(args):
         else:
             logger.info("start generate ann data number %d", output_num)
             logger.info("next checkpoint at " + next_checkpoint)
+            # generate new ann data
             generate_new_ann(args, output_num, next_checkpoint, training_positive_id, dev_positive_id, latest_step_num)
             if args.inference:
                 break
             logger.info("finished generating ann data number %d", output_num)
             output_num += 1
             last_checkpoint = next_checkpoint
+        
         if args.local_rank != -1:
             dist.barrier()
 
+def set_env(args):
+    # Setup CUDA, GPU & distributed training
+    if args.local_rank == -1:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        args.n_gpu = torch.cuda.device_count()
+    else:  # Initializes the distributed backend which will take care of sychronizing nodes/GPUs
+        torch.cuda.set_device(args.local_rank)
+        device = torch.device("cuda", args.local_rank)
+        torch.distributed.init_process_group(backend="nccl")
+        args.n_gpu = 1
+    args.device = device
+
+    if args.local_rank != -1:
+        args.world_size = torch.distributed.get_world_size()
+        args.rank = dist.get_rank()
+
+    logging.basicConfig(filename=os.path.join(args.log_dir, "train_ance.log"),
+                        format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s",
+                        datefmt="%m/%d/%Y %H:%M:%S",
+                        level=logging.INFO if args.local_rank in [-1, 0] else logging.WARN, # only in rank 0 to print logging.INFO
+    )
+    logger.warning("Process rank: %s, device: %s, n_gpu: %s, distributed training: %s",
+                   args.local_rank,
+                   device,
+                   args.n_gpu,
+                   bool(args.local_rank != -1),
+    )
 
 def main():
     parser = argparse.ArgumentParser()
     # Required parameters
-    parser.add_argument("--data_dir", default=None, type=str, required=True, help="The input data dir. Should contain the .tsv files (or other data files) for the task.",)
-    parser.add_argument("--training_dir", default=None, type=str, required=True, help="Training dir, will look for latest checkpoint dir in here",)
-    parser.add_argument("--init_model_dir", default=None, type=str, required=True, help="Initial model dir, will use this if no checkpoint is found in model_dir",)
+    parser.add_argument("--data_dir", default="./data/MSMARCO/preprocessed", type=str, help="The preprocessed data dir.",)
+    parser.add_argument("--training_dir", default="./saved", type=str, help="Training dir for latest checkpoint dir in here",)
+    parser.add_argument("--init_model_dir", default=None, type=str, help="Initial model dir, will use this if no checkpoint is found in training_dir",)
     parser.add_argument("--last_checkpoint_dir", default="", type=str, help="Last checkpoint used, this is for rerunning this script when some ann data is already generated",)
-    parser.add_argument("--model_type", default=None, type=str, required=True, help="Model type selected in the list: " + ", ".join(MSMarcoConfigDict.keys()),)
-    parser.add_argument("--output_dir", default=None, type=str, required=True, help="The output directory where the training data will be written",)
-    parser.add_argument("--cache_dir", default=None, type=str, required=True, help="The directory where cached data will be written",)
+
+    parser.add_argument("--model_name_or_path", default="roberta-base", type=str, help="Path to pre-trained model or shortcut name selected in the list: " + ", ".join(ALL_MODELS),)
+    parser.add_argument("--model_type", default="rdot_nll", type=str, help="Model type selected in the list: " + ", ".join(MSMarcoConfigDict.keys()),)
+    parser.add_argument("--ann_dir", default="./ann_dir", type=str, help="The output directory where the ANN data will be written",)
+    parser.add_argument("--cache_dir", default="./ann_cache", type=str, help="The directory where cached data will be written",)
+    
     parser.add_argument("--end_output_num", default=-1, type=int, help="Stop after this number of data versions has been generated, default run forever",)
     parser.add_argument("--max_seq_length", default=128, type=int, help="The maximum total input sequence length after tokenization. \
                                                         Sequences longer than this will be truncated, sequences shorter will be padded.",)
     parser.add_argument("--max_query_length", default=64, type=int, help="The maximum total input sequence length after tokenization. \
                                               Sequences longer than this will be truncated, sequences shorter will be padded.",)
-    parser.add_argument("--max_doc_character", default=10000, type=int, help="used before tokenizer to save tokenizer latency",)
     parser.add_argument("--per_gpu_eval_batch_size", default=128, type=int, help="The starting output file number",)
     parser.add_argument("--ann_chunk_factor", default=5, type=int, help="devide training queries into chunks",) # for 500k queryes, divided into 100k chunks for each epoch
     parser.add_argument("--topk_training", default=500, type=int, help="top k from which negative samples are collected",)
     parser.add_argument("--negative_sample", default=5, type=int, help="at each resample, how many negative samples per query do I use",)
     parser.add_argument("--ann_measure_topk_mrr", default=False, action="store_true", help="load scheduler from checkpoint or not",)
     parser.add_argument("--only_keep_latest_embedding_file", default=False, action="store_true", help="load scheduler from checkpoint or not",)
-    parser.add_argument("--no_cuda", action="store_true", help="Avoid using CUDA when available",)
     parser.add_argument("--local_rank", type=int, default=-1, help="For distributed training: local_rank",)
-    parser.add_argument("--server_ip", type=str, default="", help="For distant debugging.",)
-    parser.add_argument("--server_port", type=str, default="", help="For distant debugging.",)
     parser.add_argument("--inference", default=False, action="store_true", help="only do inference if specify",)
-    parser.add_argument("--config_name", default="", type=str, help="Pretrained config name or path if not the same as model_name",)
-    parser.add_argument("--tokenizer_name", default="", type=str, help="Pretrained tokenizer name or path if not the same as model_name",)
     
     args = parser.parse_args()
     

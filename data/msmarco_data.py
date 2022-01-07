@@ -13,9 +13,9 @@ import numpy as np
 from utils.util import pad_input_ids, multi_file_process, numbered_byte_file_generator, EmbeddingCache
 from model.models import MSMarcoConfigDict, ALL_MODELS
 from torch.utils.data import DataLoader, Dataset, TensorDataset, IterableDataset, get_worker_info
+
 from os import listdir
 from os.path import isfile, join
-
 
 def write_query_rel(args, pid2offset, query_file, positive_id_file, out_query_file, out_id_file):
     print("Writing query files " + str(out_query_file) + " and " + str(out_id_file))
@@ -181,7 +181,6 @@ def PassagePreprocessingFn(args, line, tokenizer):
 
     return p_id.to_bytes(8,'big') + passage_len.to_bytes(4,'big') + np.array(input_id_b,np.int32).tobytes()
 
-
 def QueryPreprocessingFn(args, line, tokenizer):
     line_arr = line.split('\t')
     q_id = int(line_arr[0])
@@ -191,7 +190,6 @@ def QueryPreprocessingFn(args, line, tokenizer):
     input_id_b = pad_input_ids(passage, args.max_query_length,pad_token=tokenizer.pad_token_id)
 
     return q_id.to_bytes(8,'big') + passage_len.to_bytes(4,'big') + np.array(input_id_b,np.int32).tobytes()
-
 
 def GetProcessingFn(args, query=False):
     def fn(vals, i):
@@ -214,7 +212,6 @@ def GetProcessingFn(args, query=False):
         return [ts for ts in dataset]
 
     return fn
-
 
 def GetTrainingDataProcessingFn(args, query_cache, passage_cache):
     def fn(line, i):
@@ -240,12 +237,12 @@ def GetTrainingDataProcessingFn(args, query_cache, passage_cache):
 
     return fn
 
-
 def GetTripletTrainingDataProcessingFn(args, query_cache, passage_cache):
-    def fn(line, i):
+    def fn(line, i): # ann data: for i, line in enumerate(ann_data.readlines())
         line_arr = line.split('\t')
         qid = int(line_arr[0])
         pos_pid = int(line_arr[1])
+
         neg_pids = line_arr[2].split(',')
         neg_pids = [int(neg_pid) for neg_pid in neg_pids]
 

@@ -140,28 +140,32 @@ def train(args, model, tokenizer, query_cache, passage_cache):
     while global_step < args.max_steps: # 1,000,000
         if step % args.gradient_accumulation_steps == 0 and global_step % args.logging_steps == 0:
             # check if new ann training data is availabe
+            # ann_no: latest generated ann data index; ann_path: the path of ann file; ndcg_json: the content of ann_data file 
             ann_no, ann_path, ndcg_json = get_latest_ann_data(args.ann_dir)
             # last_ann_no uses for judging whether it has got all the ann data
             if ann_path is not None and ann_no != last_ann_no:
-                logger.info("Training on new ANN data at %d", step)
-                with open(ann_path, 'r') as f:
-                    ann_training_data = f.readlines()
+                logger.info("Training on new ann data at %d with ann_training_data_%d", step, ann_no)
                 dev_ndcg = ndcg_json['ndcg']
                 ann_checkpoint_path = ndcg_json['checkpoint']
                 ann_checkpoint_no = get_checkpoint_no(ann_checkpoint_path)
-
+                
+                with open(ann_path, 'r') as f:
+                    ann_training_data = f.readlines()
                 aligned_size = (len(ann_training_data) // args.world_size) * args.world_size
                 ann_training_data = ann_training_data[:aligned_size]
-                logger.info("Total ANN queries (after align): %d", len(ann_training_data))
+                logger.info("Total ann queries (after align): %d", len(ann_training_data))
 
-                # get training dataload
+                '''
+                    Get training dataload (Important!)
+                '''
                 if args.triplet:
                     train_dataset = StreamingDataset(ann_training_data, GetTripletTrainingDataProcessingFn(args, query_cache, passage_cache))
                 else:
                     train_dataset = StreamingDataset(ann_training_data, GetTrainingDataProcessingFn(args, query_cache, passage_cache))
                 train_dataloader = DataLoader(train_dataset, batch_size=args.train_batch_size)
                 train_dataloader_iter = iter(train_dataloader)
-
+                
+                ###
                 # re-warmup with multiple times
                 if not args.single_warmup:
                     scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=len(ann_training_data))
@@ -170,9 +174,6 @@ def train(args, model, tokenizer, query_cache, passage_cache):
                 if is_first_worker():
                     # add ndcg at checkpoint step used instead of current step
                     tb_writer.add_scalar("dev_ndcg", dev_ndcg, ann_checkpoint_no)
-                    if last_ann_no != -1:
-                        tb_writer.add_scalar("epoch", last_ann_no, global_step - 1)
-                    tb_writer.add_scalar("epoch", ann_no, global_step)
                 last_ann_no = ann_no 
         '''
             Get batch size data and 
@@ -187,6 +188,15 @@ def train(args, model, tokenizer, query_cache, passage_cache):
         batch = tuple(t.to(args.device) for t in batch)
         step += 1
         # combine multiple input by using **kwargs
+        """
+        Args:
+            input_ids: Indices of input sequence tokens in the vocabulary.
+            attention_mask: Mask to avoid performing attention on padding token indices.
+                Mask values selected in ``[0, 1]``:
+                Usually  ``1`` for tokens that are NOT MASKED, ``0`` for MASKED (padded) tokens.
+            token_type_ids: Segment token indices to indicate first and second portions of the inputs.
+            label: Label corresponding to the input
+        """
         if args.triplet:
             inputs = {"query_ids": batch[0].long(),   "attention_mask_q": batch[1].long(),
                       "input_ids_a": batch[3].long(), "attention_mask_a": batch[4].long(),
@@ -369,6 +379,12 @@ def set_env(args):
                         format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s",
                         datefmt="%m/%d/%Y %H:%M:%S",
                         level=logging.INFO if args.local_rank in [-1, 0] else logging.WARN, # only in rank 0 to print logging.INFO
+    )
+    logger.warning("Process rank: %s, device: %s, n_gpu: %s, distributed training: %s",
+                   args.local_rank,
+                   device,
+                   args.n_gpu,
+                   bool(args.local_rank != -1),
     )
     # Set seed
     set_seed(args)
