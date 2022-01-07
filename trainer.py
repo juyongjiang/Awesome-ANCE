@@ -396,25 +396,25 @@ def main():
     parser.add_argument("--do_lower_case", action="store_true", help="Set this flag if you are using an uncased model.",)
     # training setting
     parser.add_argument("--triplet", default=False, action="store_true", help="Whether to run training.",)
-    parser.add_argument("--max_seq_length", default=128, type=int, help="The maximum total input sequence length after tokenization. \
+    parser.add_argument("--max_seq_length", default=512, type=int, help="The maximum total input sequence length after tokenization. \
                                             Sequences longer than this will be truncated, sequences shorter will be padded.",)
     parser.add_argument("--max_query_length", default=64, type=int, help="The maximum total input sequence length after tokenization. \
                                             Sequences longer than this will be truncated, sequences shorter will be padded.",)
     parser.add_argument("--per_gpu_train_batch_size", default=8, type=int, help="Batch size per GPU/CPU for training.",)
-    parser.add_argument("--warmup_steps", default=0, type=int, help="Linear warmup over warmup_steps.",)
     parser.add_argument("--max_steps", default=1000000, type=int, help="If > 0: set total number of training steps to perform",)
-    parser.add_argument("--save_steps", type=int, default=500, help="Save checkpoint every X updates steps.",)
+    parser.add_argument("--save_steps", type=int, default=10000, help="Save checkpoint every X updates steps.",)
     # optimizer
     parser.add_argument("--optimizer", default="lamb", type=str, help="Optimizer - lamb or adamW",)
+    parser.add_argument("--warmup_steps", default=5000, type=int, help="Linear warmup over warmup_steps.",)
     parser.add_argument("--load_optimizer_scheduler", default=False, action="store_true", help="load scheduler from checkpoint or not",)
-    parser.add_argument("--gradient_accumulation_steps", type=int, default=1, help="Number of updates steps to accumulate before performing a backward/update pass.",)
-    parser.add_argument("--learning_rate", default=5e-5, type=float, help="The initial learning rate for Adam.",)
+    parser.add_argument("--gradient_accumulation_steps", type=int, default=2, help="Number of updates steps to accumulate before performing a backward/update pass.",)
+    parser.add_argument("--learning_rate", default=1e-6, type=float, help="The initial learning rate for Adam.",)
     parser.add_argument("--single_warmup", default=False, action="store_true", help="use single or re-warmup",)
     parser.add_argument("--adam_epsilon", default=1e-8, type=float, help="Epsilon for Adam optimizer.",)
     parser.add_argument("--max_grad_norm", default=1.0, type=float, help="Max gradient norm.",)
     # log setting
-    parser.add_argument("--log_dir", default=None, type=str, help="Tensorboard log dir",)
-    parser.add_argument("--logging_steps", type=int, default=500, help="Log every X updates steps.",)
+    parser.add_argument("--log_dir", default="log", type=str, help="log dir",)
+    parser.add_argument("--logging_steps", type=int, default=100, help="Log every X updates steps.",)
     # mixed precision
     parser.add_argument("--fp16", action="store_true", help="Whether to use 16-bit (mixed) precision (through NVIDIA apex) instead of 32-bit",)
     parser.add_argument("--fp16_opt_level", type=str, default="O1", help="For fp16: Apex AMP optimization level selected in ['O0', 'O1', 'O2', \
