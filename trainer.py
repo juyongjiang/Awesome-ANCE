@@ -1,6 +1,16 @@
 import sys
 import os
 import torch
+import argparse
+import glob
+import json
+import logging
+import random
+import numpy as np
+import pandas as pd
+import transformers
+import torch.distributed as dist
+##
 from data.msmarco_data import GetTrainingDataProcessingFn, GetTripletTrainingDataProcessingFn
 from utils.util import (
     getattr_recursive,
@@ -11,7 +21,9 @@ from utils.util import (
     get_latest_ann_data,
     is_first_worker
 )
-import pandas as pd
+from utils.lamb import Lamb
+from model.models import MSMarcoConfigDict, ALL_MODELS
+##
 from transformers import glue_processors as processors
 from transformers import (
     AdamW,
@@ -20,21 +32,12 @@ from transformers import (
     RobertaTokenizer,
     get_linear_schedule_with_warmup
 )
-import transformers
-from utils.lamb import Lamb
-from model.models import MSMarcoConfigDict, ALL_MODELS
+
 from torch import nn
-import torch.distributed as dist
 from tqdm import tqdm, trange
 from torch.utils.data.distributed import DistributedSampler
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, TensorDataset
-import numpy as np
 from os.path import isfile, join
-import argparse
-import glob
-import json
-import logging
-import random
 torch.multiprocessing.set_sharing_strategy('file_system')
 try:
     from torch.utils.tensorboard import SummaryWriter
@@ -42,17 +45,19 @@ except ImportError:
     from tensorboardX import SummaryWriter
 logger = logging.getLogger(__name__)
 
-
 def train(args, model, tokenizer, query_cache, passage_cache):
     """ Train the model """
     tb_writer = None
     if is_first_worker():
-        tb_writer = SummaryWriter(log_dir=args.log_dir)
+        tb_writer = SummaryWriter(log_dir=os.path.join(args.log_dir, "tensorboard"))
     # get the whole batch size
     args.train_batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
     real_batch_size = args.train_batch_size * args.gradient_accumulation_steps * (torch.distributed.get_world_size() if args.local_rank != -1 else 1)
 
-    # get optimizer parameters and set optimizer
+    '''
+        Optimizer and model parameters
+    '''
+    # get optimizer parameters and set optimizer (layerwise optimization for lamb)
     optimizer_grouped_parameters = []
     layer_optim_params = set()
     for layer_name in ["roberta.embeddings", "score_out", "downsample1", "downsample2", "downsample3"]:
@@ -75,24 +80,28 @@ def train(args, model, tokenizer, query_cache, passage_cache):
     else:
         raise Exception("optimizer {0} not recognized! Can only be lamb or adamW".format(args.optimizer))
 
-    # Check if saved optimizer or scheduler states exist
+    # Check if saved optimizer or scheduler states exist when using apex with 16-bit (mixed) precision
     if os.path.isfile(os.path.join(args.model_name_or_path, "optimizer.pt")) and args.load_optimizer_scheduler:
         # Load in optimizer and scheduler states
         optimizer.load_state_dict(torch.load(os.path.join(args.model_name_or_path, "optimizer.pt")))
-
-    # Whether to use 16-bit (mixed) precision (through NVIDIA apex) instead of 32-bit to speed up model training and memory cost
+    
+    '''
+        Distribution model training with DP, DDP, 
+        and Apex(Support mix precision) three ways
+    '''
+    # Apex: Whether to use 16-bit (mixed) precision (through NVIDIA apex) instead of 32-bit to speed up model training and memory cost
     if args.fp16:
         try:
             from apex import amp
         except ImportError:
-            raise ImportError(
-                "Please install apex from https://www.github.com/nvidia/apex to use fp16 training.")
-        model, optimizer = amp.initialize(model, optimizer, opt_level=args.fp16_opt_level) # O0: fp32; O1: mix; O2: fp16, ex bn; O3: fp16
+            raise ImportError("Please install apex from https://www.github.com/nvidia/apex to use fp16 training.")
+        # opt_level： O0: fp32; O1: mix; O2: fp16, ex bn; O3: fp16
+        model, optimizer = amp.initialize(model, optimizer, opt_level=args.fp16_opt_level) 
 
-    # multi-gpu training (should be after apex fp16 initialization)
+    # DP: multi-gpu training (should be after apex fp16 initialization)
     if args.n_gpu > 1:
         model = torch.nn.DataParallel(model)
-    # Distributed training (should be after apex fp16 initialization)
+    # DDP: Distributed training (should be after apex fp16 initialization)
     if args.local_rank != -1:
         model = torch.nn.parallel.DistributedDataParallel(model,
                                                           device_ids=[args.local_rank],
@@ -100,32 +109,40 @@ def train(args, model, tokenizer, query_cache, passage_cache):
                                                           find_unused_parameters=True,
         )
 
-    # initialize model training
-    global_step = 0
-
-    tr_loss = 0.0
+    set_seed(args)  # reproductibility
     model.zero_grad()
     model.train()
-    set_seed(args)  # Added here for reproductibility
-
+    
+    # initialize model training
+    step = 0
+    global_step = 0
+    tr_loss = 0.0
     last_ann_no = -1
     train_dataloader = None
     train_dataloader_iter = None
     dev_ndcg = 0
-    step = 0
-    
+
     #======================================================================================================================================
+    # restore model training from checkpoint
+    if os.path.exists(args.model_name_or_path):
+        if "-" in args.model_name_or_path:
+            try:
+                global_step = int(args.model_name_or_path.split("-")[-1].split("/")[0])
+            except:
+                global_step=0
+        else:
+            global_step = 0
+        logger.info("Continuing training from checkpoint with global step %d", global_step)
     if args.single_warmup:
         scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=args.max_steps)
-    '''
-        start model training with max steps
-    '''
-    while global_step < args.max_steps:
+
+    while global_step < args.max_steps: # 1,000,000
         if step % args.gradient_accumulation_steps == 0 and global_step % args.logging_steps == 0:
             # check if new ann training data is availabe
             ann_no, ann_path, ndcg_json = get_latest_ann_data(args.ann_dir)
+            # last_ann_no uses for judging whether it has got all the ann data
             if ann_path is not None and ann_no != last_ann_no:
-                logger.info("Training on new add data at %s", ann_path)
+                logger.info("Training on new ANN data at %d", step)
                 with open(ann_path, 'r') as f:
                     ann_training_data = f.readlines()
                 dev_ndcg = ndcg_json['ndcg']
@@ -134,8 +151,9 @@ def train(args, model, tokenizer, query_cache, passage_cache):
 
                 aligned_size = (len(ann_training_data) // args.world_size) * args.world_size
                 ann_training_data = ann_training_data[:aligned_size]
+                logger.info("Total ANN queries (after align): %d", len(ann_training_data))
 
-                logger.info("Total ann queries: %d", len(ann_training_data))
+                # get training dataload
                 if args.triplet:
                     train_dataset = StreamingDataset(ann_training_data, GetTripletTrainingDataProcessingFn(args, query_cache, passage_cache))
                 else:
@@ -143,21 +161,22 @@ def train(args, model, tokenizer, query_cache, passage_cache):
                 train_dataloader = DataLoader(train_dataset, batch_size=args.train_batch_size)
                 train_dataloader_iter = iter(train_dataloader)
 
-                # re-warmup
+                # re-warmup with multiple times
                 if not args.single_warmup:
                     scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=len(ann_training_data))
-
                 if args.local_rank != -1:
-                    dist.barrier()
-
+                    dist.barrier() # sync load dataset
                 if is_first_worker():
                     # add ndcg at checkpoint step used instead of current step
                     tb_writer.add_scalar("dev_ndcg", dev_ndcg, ann_checkpoint_no)
                     if last_ann_no != -1:
                         tb_writer.add_scalar("epoch", last_ann_no, global_step - 1)
                     tb_writer.add_scalar("epoch", ann_no, global_step)
-                last_ann_no = ann_no
-
+                last_ann_no = ann_no 
+        '''
+            Get batch size data and 
+            construct multiple input by using **kwargs
+        '''
         try:
             batch = next(train_dataloader_iter)
         except StopIteration:
@@ -166,42 +185,36 @@ def train(args, model, tokenizer, query_cache, passage_cache):
 
         batch = tuple(t.to(args.device) for t in batch)
         step += 1
-
-        # 
+        # combine multiple input by using **kwargs
         if args.triplet:
-            inputs = {
-                "query_ids": batch[0].long(),
-                "attention_mask_q": batch[1].long(),
-
-                "input_ids_a": batch[3].long(),
-                "attention_mask_a": batch[4].long(),
-
-                "input_ids_b": batch[6].long(),
-                "attention_mask_b": batch[7].long()}
-        else:
-            inputs = {
-                "input_ids_a": batch[0].long(),
-                "attention_mask_a": batch[1].long(),
-
-                "input_ids_b": batch[3].long(),
-                "attention_mask_b": batch[4].long(),
-
-                "labels": batch[6]}
-
+            inputs = {"query_ids": batch[0].long(),   "attention_mask_q": batch[1].long(),
+                      "input_ids_a": batch[3].long(), "attention_mask_a": batch[4].long(),
+                      "input_ids_b": batch[6].long(), "attention_mask_b": batch[7].long()}
+        else: # the difference is that it doesn't need batch[7] and use batch[6] as labels.
+            inputs = {"input_ids_a": batch[0].long(), "attention_mask_a": batch[1].long(),
+                      "input_ids_b": batch[3].long(), "attention_mask_b": batch[4].long(),
+                      "labels": batch[6]}
+        '''
+            Forbid sync gradient with all reduce under DDP, 
+            https://zhuanlan.zhihu.com/p/250471767, to speed up training again. 
+        '''
         # sync gradients only at gradient accumulation step
         if step % args.gradient_accumulation_steps == 0:
             outputs = model(**inputs)
         else:
             with model.no_sync():
                 outputs = model(**inputs)
+        
+        '''
+            Distribution loss gather and calculation
+        '''
         # model outputs are always tuple in transformers (see doc)
         loss = outputs[0]
-
-        if args.n_gpu > 1:
+        if args.n_gpu > 1: # 
             loss = loss.mean()  # mean() to average on multi-gpu parallel training
         if args.gradient_accumulation_steps > 1:
             loss = loss / args.gradient_accumulation_steps
-
+        # Apex
         if args.fp16:
             with amp.scale_loss(loss, optimizer) as scaled_loss:
                 scaled_loss.backward()
@@ -210,9 +223,12 @@ def train(args, model, tokenizer, query_cache, passage_cache):
                 loss.backward()
             else:
                 with model.no_sync():
-                    loss.backward()
-
+                    loss.backward() # accumulation gradient but not update parameter
         tr_loss += loss.item()
+
+        '''
+            Update model parameter with accumulation gradient
+        '''
         if step % args.gradient_accumulation_steps == 0:
             if args.fp16:
                 torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), args.max_grad_norm)
@@ -223,24 +239,23 @@ def train(args, model, tokenizer, query_cache, passage_cache):
             scheduler.step()  # Update learning rate schedule
             model.zero_grad()
             global_step += 1
-
-            if args.logging_steps > 0 and global_step % args.logging_steps == 0:
-                logs = {}
-                loss_scalar = tr_loss / args.logging_steps
-                learning_rate_scalar = scheduler.get_lr()[0]
-                logs["learning_rate"] = learning_rate_scalar
-                logs["loss"] = loss_scalar
-                tr_loss = 0
-
+            '''
+                Model Evaluation
+            '''  
+            if args.evaluate_during_training and global_step % args.eval_steps == 0:
+                model.eval()
+                reranking_mrr, full_ranking_mrr = passage_dist_eval(args, model, tokenizer)
                 if is_first_worker():
-                    for key, value in logs.items():
-                        tb_writer.add_scalar(key, value, global_step)
-                    logger.info(json.dumps({**logs, **{"step": global_step}}))
+                    print("Reranking/Full ranking mrr: {0}/{1}".format(str(reranking_mrr), str(full_ranking_mrr)))
+                    mrr_dict = {"reranking": float(reranking_mrr), "full_raking": float(full_ranking_mrr)}
+                    tb_writer.add_scalars("mrr", mrr_dict, global_step)
+                    print(args.output_dir)
 
+            '''
+                Save model checkpoint
+            '''
             if is_first_worker() and args.save_steps > 0 and global_step % args.save_steps == 0:
-                # Save model checkpoint
-                output_dir = os.path.join(
-                    args.output_dir, "checkpoint-{}".format(global_step))
+                output_dir = os.path.join(args.output_dir, "checkpoint-{}".format(global_step))
                 if not os.path.exists(output_dir):
                     os.makedirs(output_dir)
                 model_to_save = (model.module if hasattr(model, "module") else model)  # Take care of distributed/parallel training
@@ -248,43 +263,30 @@ def train(args, model, tokenizer, query_cache, passage_cache):
                 tokenizer.save_pretrained(output_dir)
 
                 torch.save(args, os.path.join(output_dir, "training_args.bin"))
-                logger.info("Saving model checkpoint to %s", output_dir)
-
                 torch.save(optimizer.state_dict(), os.path.join(output_dir, "optimizer.pt"))
-                torch.save(scheduler.state_dict(), os.path.join(output_dir, "scheduler.pt"))
-                logger.info("Saving optimizer and scheduler states to %s", output_dir)
             
-            dist.barrier()
+            '''
+                Save training log
+            '''  
+            # logging_steps = 100
             if args.logging_steps > 0 and global_step % args.logging_steps == 0:
                 logs = {}
-                if args.evaluate_during_training and global_step % (args.logging_steps_per_eval*args.logging_steps) == 0:
-                    model.eval()
-                    reranking_mrr, full_ranking_mrr = passage_dist_eval(args, model, tokenizer)
-                    if is_first_worker():
-                        print("Reranking/Full ranking mrr: {0}/{1}".format(str(reranking_mrr), str(full_ranking_mrr)))
-                        mrr_dict = {"reranking": float(reranking_mrr), "full_raking": float(full_ranking_mrr)}
-                        tb_writer.add_scalars("mrr", mrr_dict, global_step)
-                        print(args.output_dir)
-
-                loss_scalar = (tr_loss - logging_loss) / args.logging_steps
+                loss_scalar = tr_loss / args.logging_steps # it is weird
                 learning_rate_scalar = scheduler.get_lr()[0]
                 logs["learning_rate"] = learning_rate_scalar
                 logs["loss"] = loss_scalar
-                logging_loss = tr_loss
-
+                tr_loss = 0
+                # only record log information in rank 0 processing
                 if is_first_worker():
                     for key, value in logs.items():
-                        print(key, type(value))
                         tb_writer.add_scalar(key, value, global_step)
-                    tb_writer.add_scalar("epoch", m_epoch, global_step)
+                    logger.info(json.dumps({**logs, **{"step": global_step}}))
                     print(json.dumps({**logs, **{"step": global_step}}))
-                dist.barrier()
     #======================================================================================================================================
     if args.local_rank == -1 or torch.distributed.get_rank() == 0:
         tb_writer.close()
 
     return global_step
-
 
 def save_checkpoint(args, model, tokenizer):
     # Saving best-practices: if you use defaults names for the model, you can
@@ -362,6 +364,11 @@ def set_env(args):
         args.n_gpu = 1
     args.device = device
 
+    logging.basicConfig(filename=os.path.join(arg.log_dir, "train_ance.log"),
+                        format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s",
+                        datefmt="%m/%d/%Y %H:%M:%S",
+                        level=logging.INFO if args.local_rank in [-1, 0] else logging.WARN, # only in rank 0 to print logging.INFO
+    )
     # Set seed
     set_seed(args)
 
@@ -403,10 +410,11 @@ def main():
     parser.add_argument("--per_gpu_train_batch_size", default=8, type=int, help="Batch size per GPU/CPU for training.",)
     parser.add_argument("--max_steps", default=1000000, type=int, help="If > 0: set total number of training steps to perform",)
     parser.add_argument("--save_steps", type=int, default=10000, help="Save checkpoint every X updates steps.",)
+    parser.add_argument("--eval_steps", type=int, default=200, help="Log every X updates steps.",)
     # optimizer
     parser.add_argument("--optimizer", default="lamb", type=str, help="Optimizer - lamb or adamW",)
     parser.add_argument("--warmup_steps", default=5000, type=int, help="Linear warmup over warmup_steps.",)
-    parser.add_argument("--load_optimizer_scheduler", default=False, action="store_true", help="load scheduler from checkpoint or not",)
+    parser.add_argument("--load_optimizer_scheduler", default=False, action="store_true", help="load optimizer scheduler from checkpoint or not",)
     parser.add_argument("--gradient_accumulation_steps", type=int, default=2, help="Number of updates steps to accumulate before performing a backward/update pass.",)
     parser.add_argument("--learning_rate", default=1e-6, type=float, help="The initial learning rate for Adam.",)
     parser.add_argument("--single_warmup", default=False, action="store_true", help="use single or re-warmup",)
@@ -426,20 +434,34 @@ def main():
     
     # -----------------------------------------------------
     set_env(args) # set run env and reproducible seed
-    tokenizer, model = load_model(args)
+    '''
+        Step 1: Dataset loading by bytes 
+    '''
     # query 
     query_collection_path = os.path.join(args.data_dir, "train-query")
     query_cache = EmbeddingCache(query_collection_path)
     # passages
     passage_collection_path = os.path.join(args.data_dir, "passages")
     passage_cache = EmbeddingCache(passage_collection_path)
-
+    
+    '''
+        Step 2: Pretrained model and tokenizer 
+        with model_name_or_path (roberta-base)
+    '''
+    tokenizer, model = load_model(args)
+    
+    '''
+        Step 3: Model Training
+    '''
     with query_cache, passage_cache:
         global_step = train(args, model, tokenizer, query_cache, passage_cache)
 
+    '''
+        Step 4: Model Save and Evaluation
+    '''
     save_checkpoint(args, model, tokenizer)
     results = evaluation(args, model, tokenizer)
-    print("Model Evaluation: ", results)
+    print("Model Evaluation Results: ", results)
 
 if __name__ == "__main__":
     main()
