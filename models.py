@@ -139,6 +139,7 @@ class NLL_MultiChunk(EmbeddingMixin):
         attention_mask_body = attention_mask_a.reshape(batchS, chunk_factor, -1)[:, :, 0]  # [batchS, chunk_factor]
         inverted_bias = ((1 - attention_mask_body) * (-9999)).float() # [batchS, chunk_factor]
         a12 = torch.matmul(q_embs.unsqueeze(1), a_embs.transpose(1, 2))  # [batch, 1, chunk_factor]
+        # using the max pooling to get single score
         logits_a = (a12[:, 0, :] + inverted_bias).max(dim=-1, keepdim=False).values  # [batch]
         # -------------------------------------
 
@@ -146,6 +147,7 @@ class NLL_MultiChunk(EmbeddingMixin):
         attention_mask_body = attention_mask_b.reshape(batchS, chunk_factor, -1)[:, :, 0]  # [batchS, chunk_factor]
         inverted_bias = ((1 - attention_mask_body) * (-9999)).float() # [batchS, chunk_factor]
         a12 = torch.matmul(q_embs.unsqueeze(1), b_embs.transpose(1, 2))  # [batch, 1, chunk_factor]
+        # using the max pooling to get single score
         logits_b = (a12[:, 0, :] + inverted_bias).max(dim=-1, keepdim=False).values  # [batch]
         # -------------------------------------
 

@@ -219,6 +219,7 @@ def write_query_rel(args, pid2offset, query_file, positive_id_file, out_query_fi
                 docid = int(docid[1:])
             else:
                 docid = int(docid)
+            # topicid == query id, docid == passage id in raw data
             out_id.write(str(qid2offset[topicid]) + "\t" + str(pid2offset[docid]) + "\t" + rel + "\n")
             out_line_count += 1
         print("Total lines written: " + str(out_line_count))
@@ -254,6 +255,7 @@ def preprocess(args):
         write_query_rel(args, pid2offset, "msmarco-doctrain-queries.tsv", "msmarco-doctrain-qrels.tsv", "train-query", "train-qrel.tsv", QueryPreprocessingFn)
         write_query_rel(args, pid2offset, "msmarco-test2019-queries.tsv", "2019qrels-docs.txt", "dev-query", "dev-qrel.tsv", QueryPreprocessingFn)
     else:
+        # train-qrel.tsv saves "query index and relevant passage index"
         write_query_rel(args, pid2offset, "queries.train.tsv", "qrels.train.tsv", "train-query", "train-qrel.tsv", QueryPreprocessingFn)
         write_query_rel(args, pid2offset, "queries.dev.small.tsv", "qrels.dev.small.tsv", "dev-query", "dev-qrel.tsv", QueryPreprocessingFn)
 

@@ -110,73 +110,78 @@ def EvalDevQuery(query_embedding2id, passage_embedding2id, dev_query_positive_id
 def main():
     parser = argparse.ArgumentParser()
     ## required arguments
-    parser.add_argument("--raw_data_dir", default=None, type=str, help="The path of raw data dir",)
-    parser.add_argument("--processed_data_dir", default=None, type=str, help="The path of preprocessed data dir",)
+    parser.add_argument("--raw_data_dir", default="./data/MSMARCO/", type=str, help="The path of raw data dir",)
+    parser.add_argument("--processed_data_dir", default="./data/MSMARCO/preprocessed", type=str, help="The path of preprocessed data dir",)
+
     parser.add_argument("--checkpoint_path", default=None, type=str, help="Location for dumpped query and passage/document embeddings which is output_dir",)
     parser.add_argument("--checkpoint", default=None, type=int, help="Embedding from which checkpoint(ie: 200000)",)
+
     parser.add_argument("--data_type", default=None, type=int, help="0 for document, 1 for passage",)
     parser.add_argument("--test_set", default=None, type=int, help="0 for dev_set, 1 for eval_set",)
     args = parser.parse_args()
 
     ## Load Qrel
-    if args.data_type == 0:
+    if args.data_type == 0: # doc
         topN = 100
-    else:
+    else: # passage
         topN = 1000
     dev_query_positive_id = {}
+    # str(qid2offset[topicid]) + "\t" + str(pid2offset[docid]) + "\t" + rel + "\n"
     query_positive_id_path = os.path.join(args.processed_data_dir, "dev-qrel.tsv")
-
     with open(query_positive_id_path, 'r', encoding='utf8') as f:
         tsvreader = csv.reader(f, delimiter="\t")
-        for [topicid, docid, rel] in tsvreader:
+        for [topicid, docid, rel] in tsvreader: # [topicid, docid, rel] is processing unique index not practical id
             topicid = int(topicid)
             docid = int(docid)
             if topicid not in dev_query_positive_id:
                 dev_query_positive_id[topicid] = {}
-            dev_query_positive_id[topicid][docid] = int(rel)
+            dev_query_positive_id[topicid][docid] = int(rel) # {topici_id:{docid:rel, ...}, ...}
 
     ## Prepare rerank data
-    qidmap_path = args.processed_data_dir+"/qid2offset.pickle"
-    pidmap_path = args.processed_data_dir+"/pid2offset.pickle"
+    qidmap_path = args.processed_data_dir + "/qid2offset.pickle" # {real_query_id: query_id, ...}
+    pidmap_path = args.processed_data_dir + "/pid2offset.pickle" # {real_passage_id: passage_id, ...}
+    # qidmap and pidmap, {raw_id: dataset_id, ...}
+    with open(qidmap_path, 'rb') as handle:
+        qidmap = pickle.load(handle)
+    with open(pidmap_path, 'rb') as handle:
+        pidmap = pickle.load(handle)
+    
+    # query data and passage data from raw data
     if args.data_type == 0:
         if args.test_set == 1:
-            query_path = os.path.join(args.raw_data_dir, "doc/msmarco-test2019-queries.tsv")
+            query_path = os.path.join(args.raw_data_dir, "doc/msmarco-test2019-queries.tsv") # 2019qrels-docs.txt
             passage_path = os.path.join(args.raw_data_dir, "doc/msmarco-doctest2019-top100")
         else:
             query_path = os.path.join(args.raw_data_dir, "doc/msmarco-docdev-queries.tsv")
             passage_path = os.path.join(args.raw_data_dir, "doc/msmarco-docdev-top100")
     else:
         if args.test_set == 1:
-            query_path = os.path.join(args.raw_data_dir, "doc/msmarco-test2019-queries.tsv")
-            passage_path = os.path.join(args.raw_data_dir, "passage/msmarco-passagetest2019-top1000.tsv")
+            query_path = os.path.join(args.raw_data_dir, "doc/msmarco-test2019-queries.tsv") # 2019qrels-docs.txt
+            passage_path = os.path.join(args.raw_data_dir, "doc/msmarco-passagetest2019-top1000.tsv")
         else:
-            query_path = os.path.join(args.raw_data_dir, "passage/queries.dev.small.tsv")
+            query_path = os.path.join(args.raw_data_dir, "passage/queries.dev.small.tsv") # qrels.dev.small.tsv
             passage_path = os.path.join(args.raw_data_dir, "passage/top1000.dev")
-        
-    with open(qidmap_path, 'rb') as handle:
-        qidmap = pickle.load(handle)
-
-    with open(pidmap_path, 'rb') as handle:
-        pidmap = pickle.load(handle)
-
+    
+    # load query data and get query id set  
     qset = set()
     with gzip.open(query_path, 'rt', encoding='utf-8') if query_path[-2:] == "gz" else open(query_path, 'rt', encoding='utf-8') as f:
         tsvreader = csv.reader(f, delimiter="\t")
-        for [qid, query] in tsvreader:
-            qset.add(qid)
+        for [qid, query] in tsvreader: # each query data
+            qset.add(qid) # qset = {qid1, qid2, ...}
 
-    bm25 = collections.defaultdict(set)
+    bm25 = collections.defaultdict(set) # [(key, value[set]), ...]
+    # passage data
     with gzip.open(passage_path, 'rt', encoding='utf-8') if passage_path[-2:] == "gz" else open(passage_path, 'rt', encoding='utf-8') as f:
         for line in tqdm(f):
             if args.data_type == 0:
                 [qid, Q0, pid, rank, score, runstring] = line.split(' ')
-                pid = pid[1:]
+                pid = pid[1:] # passage id in practical
             else:
                 [qid, pid, query, passage] = line.split("\t")
-            if qid in qset and int(qid) in qidmap:
-                bm25[qidmap[int(qid)]].add(pidmap[int(pid)]) 
-
-    print("number of queries with " +str(topN) + " BM25 passages:", len(bm25))
+            
+            if qid in qset and int(qid) in qidmap: # int(qid) in qidmap means in qidmap.keys()
+                bm25[qidmap[int(qid)]].add(pidmap[int(pid)]) # [(qid_index, {passage_index}), ...]
+    print("number of queries with " + str(topN) + " BM25 passages:", len(bm25))
 
     ## Calculate Metrics
     dev_query_embedding = []
@@ -213,30 +218,32 @@ def main():
     else:
         rerank_data = {}
         all_dev_I = []
-        for i,qid in enumerate(dev_query_embedding2id):
+        for i, qid in enumerate(dev_query_embedding2id):
             p_set = []
             p_set_map = {}
-            if qid not in bm25:
-                print(qid,"not in bm25")
+            if qid not in bm25: # qid is processing index of dataset
+                print(qid, "not in bm25")
             else:
                 count = 0
-                for k,pid in enumerate(bm25[qid]):
+                for k, pid in enumerate(bm25[qid]): # the qid with many relevant qid, both are index of dataset
                     if pid in pidmap:
                         for val in pidmap[pid]:
                             p_set.append(passage_embedding[val])
                             p_set_map[count] = val # new rele pos(key) to old rele pos(val)
                             count += 1
                     else:
-                        print(pid,"not in passages")
-            dim = passage_embedding.shape[1]
+                        print(pid, "not in passages")
+            
+            dim = passage_embedding.shape[1] # hidden dim
             faiss.omp_set_num_threads(16)
-            cpu_index = faiss.IndexFlatIP(dim)
+            cpu_index = faiss.IndexFlatIP(dim) # get the index for dense embedding
             p_set =  np.asarray(p_set)
             cpu_index.add(p_set)    
             _, dev_I = cpu_index.search(dev_query_embedding[i:i+1], len(p_set))
             for j in range(len(dev_I[0])):
                 dev_I[0][j] = p_set_map[dev_I[0][j]]
             all_dev_I.append(dev_I[0])
+
         result = EvalDevQuery(dev_query_embedding2id, passage_embedding2id, dev_query_positive_id, all_dev_I, topN)
         final_ndcg, eval_query_cnt, final_Map, final_mrr, final_recall, hole_rate, ms_mrr, Ahole_rate, metrics, prediction = result
         print("Reranking Results for checkpoint " + str(args.checkpoint))
@@ -252,7 +259,7 @@ def main():
     dim = passage_embedding.shape[1]
     faiss.omp_set_num_threads(16)
     cpu_index = faiss.IndexFlatIP(dim)
-    cpu_index.add(passage_embedding)    
+    cpu_index.add(passage_embedding) 
     _, dev_I = cpu_index.search(dev_query_embedding, topN)
     result = EvalDevQuery(dev_query_embedding2id, passage_embedding2id, dev_query_positive_id, dev_I, topN)
     final_ndcg, eval_query_cnt, final_Map, final_mrr, final_recall, hole_rate, ms_mrr, Ahole_rate, metrics, prediction = result
