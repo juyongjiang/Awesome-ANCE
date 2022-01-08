@@ -122,6 +122,7 @@ def GetTripletTrainingDataProcessingFn(args, query_cache, passage_cache):
     def fn(line, i): # ann data: for i, line in enumerate(ann_data.readlines())
         line_arr = line.split('\t')
         # qid, pos_pid, neg_pids (token index in the dataset)
+        # f.write("{}\t{}\t{}\n".format(query_id, pos_pid, ','.join(str(neg_pid) for neg_pid in query_negative_passage[query_id])))
         qid = int(line_arr[0])
         pos_pid = int(line_arr[1])
         neg_pids = line_arr[2].split(',')

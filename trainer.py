@@ -136,6 +136,7 @@ def train(args, model, tokenizer, query_cache, passage_cache):
             # last_ann_no uses for judging whether it has got all the ann data
             if ann_path is not None and ann_no != last_ann_no:
                 logger.info("Training on new ann data at %d with ann_training_data_%d", step, ann_no)
+                # ndcg_output_path = os.path.join(args.ann_dir, "ann_ndcg_" + str(output_num))
                 dev_ndcg = ndcg_json['ndcg']
                 ann_checkpoint_path = ndcg_json['checkpoint']
                 ann_checkpoint_no = get_checkpoint_no(ann_checkpoint_path)

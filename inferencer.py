@@ -40,6 +40,8 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 def GenerateNegativePassaageID(args, query_embedding2id, passage_embedding2id, training_query_positive_id, I_nearest_neighbor, effective_q_id):
+    # training_query_positive_id: {query_id: passage_id, ...}
+    # I_nearest_neighbor: _, I = cpu_index.search(query_embedding, top_k) # I: [query_embedding.shape[0], 100 (passage id)]
     query_negative_passage = {}
     SelectTopK = args.ann_measure_topk_mrr
     mrr = 0  # only meaningful if it is SelectTopK = True
@@ -47,27 +49,22 @@ def GenerateNegativePassaageID(args, query_embedding2id, passage_embedding2id, t
 
     for query_idx in range(I_nearest_neighbor.shape[0]):
         query_id = query_embedding2id[query_idx]
-
         if query_id not in effective_q_id:
             continue
-
         num_queries += 1
-
         pos_pid = training_query_positive_id[query_id]
-        top_ann_pid = I_nearest_neighbor[query_idx, :].copy()
+        top_ann_pid = I_nearest_neighbor[query_idx, :].copy() # [100 (passage id)]
 
-        if SelectTopK:
-            selected_ann_idx = top_ann_pid[:args.negative_sample + 1]
+        if SelectTopK: # select negative from topk-topk nearest_neighbor, which are informative negative samples
+            selected_ann_idx = top_ann_pid[:args.negative_sample + 1] # e.g. negative_sample=5, num+1 can make sure get negative samples.
         else:
             negative_sample_I_idx = list(range(I_nearest_neighbor.shape[1]))
-            random.shuffle(negative_sample_I_idx)
+            random.shuffle(negative_sample_I_idx) # random select from topk negative samples not topk-topk
             selected_ann_idx = top_ann_pid[negative_sample_I_idx]
 
         query_negative_passage[query_id] = []
-
         neg_cnt = 0
         rank = 0
-
         for idx in selected_ann_idx:
             neg_pid = passage_embedding2id[idx]
             rank += 1
@@ -75,20 +72,17 @@ def GenerateNegativePassaageID(args, query_embedding2id, passage_embedding2id, t
                 if rank <= 10:
                     mrr += 1 / rank
                 continue
-
             if neg_pid in query_negative_passage[query_id]:
                 continue
-
             if neg_cnt >= args.negative_sample:
                 break
-
             query_negative_passage[query_id].append(neg_pid)
             neg_cnt += 1
 
     if SelectTopK:
         print("Rank:" + str(args.rank) + " --- ANN MRR:" + str(mrr / num_queries))
 
-    return query_negative_passage
+    return query_negative_passage # {query_id: negative_passage_id, ...}
 
 # query id [all_data_num, 1], passage id, positive id ({query_id: {passage_id:rel, ...}, ...}), retrieval topk id
 def EvalDevQuery(args, query_embedding2id, passage_embedding2id, dev_query_positive_id, I_nearest_neighbor):
@@ -291,23 +285,24 @@ def generate_new_ann(args, output_num, checkpoint_path, training_query_positive_
         logger.info("Chunked {} query from {}".format(len(query_embedding), num_queries))
 
         # I: [number of queries, topk]
-        _, I = cpu_index.search(query_embedding, top_k) # I: [all_data_num, 100 (passage id)]
+        _, I = cpu_index.search(query_embedding, top_k) # I: [query_embedding.shape[0], 100 (passage id)]
         effective_q_id = set(query_embedding2id.flatten())
-
+        # {query_id: negative_passage_id, ...}
         query_negative_passage = GenerateNegativePassaageID(args,
                                                             query_embedding2id,
                                                             passage_embedding2id,
-                                                            training_query_positive_id,
+                                                            training_query_positive_id, # training_query_positive_id, {query_id: passage_id, ...}
                                                             I,
                                                             effective_q_id)
 
         logger.info("***** Construct ANN Triplet *****")
         train_data_output_path = os.path.join(args.ann_dir, "ann_training_data_" + str(output_num))
         with open(train_data_output_path, 'w') as f:
-            query_range = list(range(I.shape[0]))
+            query_range = list(range(I.shape[0])) # [0, 1, 2, ..., queries_per_chunk-1]
             random.shuffle(query_range)
             for query_idx in query_range:
                 query_id = query_embedding2id[query_idx]
+                # training_query_positive_id, {query_id: passage_id, ...}
                 if query_id not in effective_q_id or query_id not in training_query_positive_id:
                     continue
                 pos_pid = training_query_positive_id[query_id]
@@ -315,7 +310,7 @@ def generate_new_ann(args, output_num, checkpoint_path, training_query_positive_
 
         ndcg_output_path = os.path.join(args.ann_dir, "ann_ndcg_" + str(output_num))
         with open(ndcg_output_path, 'w') as f:
-            json.dump({'ndcg': dev_ndcg, 'checkpoint': checkpoint_path}, f)
+            json.dump({'ndcg': dev_ndcg, 'checkpoint': checkpoint_path}, f) # checkpoint_path, saved/checkpint-[step_no]
 
         return dev_ndcg, num_queries_dev
 
@@ -448,7 +443,7 @@ def main():
     parser.add_argument("--max_query_length", default=64, type=int, help="The maximum total input sequence length after tokenization. \
                                               Sequences longer than this will be truncated, sequences shorter will be padded.",)
     parser.add_argument("--per_gpu_eval_batch_size", default=128, type=int, help="The starting output file number",)
-    parser.add_argument("--ann_chunk_factor", default=5, type=int, help="devide training queries into chunks",) # for 500k queryes, divided into 100k chunks for each epoch
+    parser.add_argument("--ann_chunk_factor", default=-1, type=int, help="devide training queries into chunks",) # for 500k queryes, divided into 100k chunks for each epoch
     parser.add_argument("--topk_training", default=500, type=int, help="top k from which negative samples are collected",)
     parser.add_argument("--negative_sample", default=1, type=int, help="at each resample, how many negative samples per query do I use",)
     parser.add_argument("--ann_measure_topk_mrr", default=False, action="store_true", help="load scheduler from checkpoint or not",)
