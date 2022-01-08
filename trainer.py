@@ -25,7 +25,6 @@ from transformers import (
     RobertaTokenizer,
     get_linear_schedule_with_warmup
 )
-
 import torch.distributed as dist
 from torch import nn
 from torch.utils.data.distributed import DistributedSampler
@@ -35,7 +34,6 @@ try:
     from torch.utils.tensorboard import SummaryWriter
 except ImportError:
     from tensorboardX import SummaryWriter
-
 
 def train(args, model, tokenizer, query_cache, passage_cache):
     """ Train the model """
@@ -339,19 +337,21 @@ def load_model(args):
         torch.distributed.barrier()
 
     # model configuration followed by huggingface to load pretrained model and tokenizer
-    args.model_type = args.model_type.lower() # rdot_nll (FirstP) or rdot_nll_multi_chunk (MaxP)
-    configObj = MSMarcoConfigDict[args.model_type]
-    config = configObj.config_class.from_pretrained(args.model_name_or_path,
-                                                    num_labels=num_labels,
-                                                    finetuning_task=args.task_name,
+    configObj = MSMarcoConfigDict[args.model_type.lower()] # rdot_nll (FirstP) or rdot_nll_multi_chunk (MaxP)
+    # RobertaConfig.from_pretrained
+    config = configObj.config_class.from_pretrained(args.model_name_or_path, # roberta-base
+                                                    num_labels=num_labels, # 2
+                                                    finetuning_task=args.task_name, # msmarco
                                                     cache_dir=None,
     )
-    tokenizer = configObj.tokenizer_class.from_pretrained(args.model_name_or_path,
-                                                          do_lower_case=args.do_lower_case, # whether transfer words into lower case
+    # RobertaTokenizer.from_pretrained
+    tokenizer = configObj.tokenizer_class.from_pretrained(args.model_name_or_path, # roberta-base
+                                                          do_lower_case=args.do_lower_case, # False, whether transfer words into lower case
                                                           cache_dir=None,
     )
+    # RobertaDot_NLL_LN.from_pretrained or RobertaDot_CLF_ANN_NLL_MultiChunk.pretrained
     model = configObj.model_class.from_pretrained(args.model_name_or_path,
-                                                  from_tf=bool(".ckpt" in args.model_name_or_path), 
+                                                  from_tf=bool(".ckpt" in args.model_name_or_path), # from tensorflow checkpoint loading
                                                   config=config,
                                                   cache_dir=None,
     )
