@@ -5,7 +5,7 @@ import argparse
 import json
 import numpy as np
 import torch
-from model.models import MSMarcoConfigDict, ALL_MODELS
+from models import MSMarcoConfigDict, ALL_MODELS
 from torch.utils.data import TensorDataset, IterableDataset
 
 class EmbeddingCache:

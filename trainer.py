@@ -11,7 +11,7 @@ import numpy as np
 ##
 from data.msmarco_data import GetTrainingDataProcessingFn, GetTripletTrainingDataProcessingFn
 from dataloader import EmbeddingCache, StreamingDataset
-from model.models import MSMarcoConfigDict, ALL_MODELS
+from models import MSMarcoConfigDict, ALL_MODELS
 
 from utils.util import getattr_recursive, set_seed, get_checkpoint_no, get_latest_ann_data, is_first_worker
 from utils.lamb import Lamb

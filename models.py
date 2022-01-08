@@ -1,5 +1,4 @@
 import sys
-sys.path += ['../']
 import torch
 from torch import nn
 from transformers import (
