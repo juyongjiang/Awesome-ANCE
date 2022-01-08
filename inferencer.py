@@ -369,8 +369,6 @@ def ann_data_gen(args):
     if is_first_worker():
         if not os.path.exists(args.ann_dir):
             os.makedirs(args.ann_dir)
-        if not os.path.exists(args.cache_dir):
-            os.makedirs(args.cache_dir)
     # positive id for train and dev dataset
     # {query_id: passage_id, ...}, {query_id: {passage_id:rel, ...}, ...}
     training_positive_id, dev_positive_id = load_positive_ids(args)
@@ -435,21 +433,20 @@ def main():
     parser.add_argument("--model_type", default="rdot_nll", type=str, help="Model type selected in the list: " + ", ".join(MSMarcoConfigDict.keys()),)
     parser.add_argument("--model_name_or_path", default="roberta-base", type=str, help="Path to pre-trained model or shortcut name selected in the list: " + ", ".join(ALL_MODELS),)
     parser.add_argument("--ann_dir", default="./data/MSMARCO/ann_dir", type=str, help="The output directory where the ANN data will be written",)
-    parser.add_argument("--cache_dir", default="./data/MSMARCO/ann_cache", type=str, help="The directory where cached data will be written",)
-    
-    parser.add_argument("--end_output_num", default=-1, type=int, help="Stop after this number of data versions has been generated, default run forever",)
     parser.add_argument("--max_seq_length", default=128, type=int, help="The maximum total input sequence length after tokenization. \
                                                         Sequences longer than this will be truncated, sequences shorter will be padded.",)
     parser.add_argument("--max_query_length", default=64, type=int, help="The maximum total input sequence length after tokenization. \
                                               Sequences longer than this will be truncated, sequences shorter will be padded.",)
+    
     parser.add_argument("--per_gpu_eval_batch_size", default=128, type=int, help="The starting output file number",)
-    parser.add_argument("--ann_chunk_factor", default=-1, type=int, help="devide training queries into chunks",) # for 500k queryes, divided into 100k chunks for each epoch
+    parser.add_argument("--ann_chunk_factor", default=-1, type=int, help="devide training queries into chunks",)
     parser.add_argument("--topk_training", default=500, type=int, help="top k from which negative samples are collected",)
     parser.add_argument("--negative_sample", default=1, type=int, help="at each resample, how many negative samples per query do I use",)
     parser.add_argument("--ann_measure_topk_mrr", default=False, action="store_true", help="load scheduler from checkpoint or not",)
-    parser.add_argument("--only_keep_latest_embedding_file", default=False, action="store_true", help="load scheduler from checkpoint or not",)
+    
     parser.add_argument("--local_rank", type=int, default=-1, help="For distributed training: local_rank",)
     parser.add_argument("--inference", default=False, action="store_true", help="only do inference if specify",)
+    parser.add_argument("--end_output_num", default=-1, type=int, help="Stop after this number of data versions has been generated, default run forever",)
     
     args = parser.parse_args()
     
