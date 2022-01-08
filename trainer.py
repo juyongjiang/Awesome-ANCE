@@ -5,11 +5,9 @@ import argparse
 import glob
 import json
 import logging
+logger = logging.getLogger(__name__)
 import random
 import numpy as np
-import pandas as pd
-import transformers
-import torch.distributed as dist
 ##
 from data.msmarco_data import GetTrainingDataProcessingFn, GetTripletTrainingDataProcessingFn
 from dataloader import EmbeddingCache, StreamingDataset
@@ -28,17 +26,16 @@ from transformers import (
     get_linear_schedule_with_warmup
 )
 
+import torch.distributed as dist
 from torch import nn
-from tqdm import tqdm, trange
 from torch.utils.data.distributed import DistributedSampler
-from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, TensorDataset
-from os.path import isfile, join
+from torch.utils.data import DataLoader
 torch.multiprocessing.set_sharing_strategy('file_system')
 try:
     from torch.utils.tensorboard import SummaryWriter
 except ImportError:
     from tensorboardX import SummaryWriter
-logger = logging.getLogger(__name__)
+
 
 def train(args, model, tokenizer, query_cache, passage_cache):
     """ Train the model """
