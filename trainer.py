@@ -129,7 +129,9 @@ def train(args, model, tokenizer, query_cache, passage_cache):
     while global_step < args.max_steps: # 1,000,000
         if step % args.gradient_accumulation_steps == 0 and global_step % args.logging_steps == 0:
             # check if new ann training data is availabe
-            # ann_no: latest generated ann data index; ann_path: the path of ann file; ndcg_json: the content of ann_data file 
+            # ann_no: latest generated ann data index; 
+            # ann_path: the path of training ann file [qid, pos_id, neg_id]; 
+            # ndcg_json: a dict of checkpoint path info
             ann_no, ann_path, ndcg_json = get_latest_ann_data(args.ann_dir)
             # last_ann_no uses for judging whether it has got all the ann data
             if ann_path is not None and ann_no != last_ann_no:
@@ -196,7 +198,7 @@ def train(args, model, tokenizer, query_cache, passage_cache):
             or
             (query_data[0], query_data[1], query_data[2], neg_data[0], neg_data[1], neg_data[2], neg_label)
         """
-        # we don't use segment, so we treat query and passage are the same.
+        # Warning: we don't use segment (token type), so we treat query and passage are the same.
         if args.triplet: 
             inputs = {"query_ids": batch[0].long(),   "attention_mask_q": batch[1].long(),
                       "input_ids_a": batch[3].long(), "attention_mask_a": batch[4].long(),
@@ -275,6 +277,7 @@ def train(args, model, tokenizer, query_cache, passage_cache):
 
                 torch.save(args, os.path.join(output_dir, "training_args.bin"))
                 torch.save(optimizer.state_dict(), os.path.join(output_dir, "optimizer.pt"))
+                torch.save(scheduler.state_dict(), os.path.join(output_dir, "scheduler.pt"))
             
             '''
                 Save training log
@@ -377,7 +380,7 @@ def set_env(args):
         args.n_gpu = 1
     args.device = device
 
-    logging.basicConfig(filename=os.path.join(args.log_dir, "train_ance.log"),
+    logging.basicConfig(filename=os.path.join(args.log_dir, "trainer_ance.log"),
                         format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s",
                         datefmt="%m/%d/%Y %H:%M:%S",
                         level=logging.INFO if args.local_rank in [-1, 0] else logging.WARN, # only in rank 0 to print logging.INFO
@@ -397,7 +400,7 @@ def main():
     parser.add_argument("--task_name", default="MSMarco", type=str, help="The name of the task to train selected in the list: " + ", ".join(processors.keys()),)
     # Required parameters
     parser.add_argument("--data_dir", default="./data/MSMARCO/preprocessed", type=str, help="The input preprocessed data dir. Should contain the cached passage and query files",)
-    parser.add_argument("--ann_dir", default="./data/ann_data", type=str, help="The ann training data dir. Should contain the output of ann data generation job",)
+    parser.add_argument("--ann_dir", default="./data/MSMARCO/ann_data", type=str, help="The ann training data dir. Should contain the output of ann data generation job",)
     parser.add_argument("--model_type", default="rdot_nll", type=str, help="rdot_nll (FirstP) or rdot_nll_multi_chunk (MaxP)",)
     parser.add_argument("--output_dir", default="saved", type=str, help="The output directory where the model predictions and checkpoints will be written.",)
     # pretrained model

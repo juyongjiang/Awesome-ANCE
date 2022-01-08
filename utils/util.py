@@ -18,6 +18,9 @@ def getattr_recursive(obj, name):
             return None
     return obj
 
+def concat_key(all_list, key, axis=0):
+    return np.concatenate([ele[key] for ele in all_list], axis=axis)
+
 def barrier_array_merge(args, data_array, merge_axis=0, prefix="", load_cache=False, only_load_in_master=False):
     # data array: [B, any dimension]
     # merge alone one axis
@@ -62,7 +65,8 @@ def barrier_array_merge(args, data_array, merge_axis=0, prefix="", load_cache=Fa
     dist.barrier()
     return data_array_agg
 
-# to reuse pytrec_eval, id must be string
+# to reuse pytrec_eval, id (keys) must be string
+# {query_id: {passage_id:rel, ...}, ...}
 def convert_to_string_id(result_dict):
     string_id_dict = {}
     # format [string, dict[string, val]]
@@ -85,18 +89,16 @@ def set_seed(args):
 def is_first_worker():
     return not dist.is_available() or not dist.is_initialized() or dist.get_rank() == 0
 
-def concat_key(all_list, key, axis=0):
-    return np.concatenate([ele[key] for ele in all_list], axis=axis)
-
 def get_checkpoint_no(checkpoint_path):
     nums = re.findall(r'\d+', checkpoint_path)
     return int(nums[-1]) if len(nums) > 0 else 0
 
 def get_latest_ann_data(ann_data_path): # ann_dir
-    ANN_PREFIX = "ann_ndcg_"
     if not os.path.exists(ann_data_path):
         print("%s is not existed" % ann_data_path)
         return -1, None, None
+
+    ANN_PREFIX = "ann_ndcg_"
     files = list(next(os.walk(ann_data_path))[2])
     num_start_pos = len(ANN_PREFIX)
     # sequence of ann data with ann_ndcg_[data_no], [data_no] represents which time it generates.
@@ -104,8 +106,9 @@ def get_latest_ann_data(ann_data_path): # ann_dir
     if len(data_no_list) > 0:
         data_no = max(data_no_list)
         with open(os.path.join(ann_data_path, ANN_PREFIX + str(data_no)), 'r') as f:
-            ndcg_json = json.load(f)
-        return data_no, os.path.join(ann_data_path, "ann_training_data_" + str(data_no)), ndcg_json
+            ndcg_json = json.load(f) # ndcg_json is a dict, saved some info
+        return data_no, os.path.join(ann_data_path, "ann_training_data_" + str(data_no)), ndcg_json # ann_ndcg_[data_no]
+        # generate current training ann data with max data_no, according to ndcg_json information to generate new data and then save in ann_training_data_data_no 
     return -1, None, None
 
 def all_gather(data):

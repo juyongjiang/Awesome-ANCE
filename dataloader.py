@@ -90,6 +90,7 @@ def GetProcessingFn(args, query=False):
 
     return fn
 
+# read from ann file to get query id, pos_id, neg_id which is index in the dataset
 def GetTrainingDataProcessingFn(args, query_cache, passage_cache):
     def fn(line, i):
         line_arr = line.split('\t')
@@ -120,7 +121,7 @@ def GetTripletTrainingDataProcessingFn(args, query_cache, passage_cache):
     # passage_cache: [(len, [id1, id2, id3, ....., 1, 1, 1, 1]), ...]
     def fn(line, i): # ann data: for i, line in enumerate(ann_data.readlines())
         line_arr = line.split('\t')
-        # qid, pos_pid, neg_pids (token index in the dictionary)
+        # qid, pos_pid, neg_pids (token index in the dataset)
         qid = int(line_arr[0])
         pos_pid = int(line_arr[1])
         neg_pids = line_arr[2].split(',')
