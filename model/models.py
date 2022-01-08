@@ -12,7 +12,6 @@ from transformers import (
     # BertConfig
 )
 import torch.nn.functional as F
-from data.process_fn import triple_process_fn, triple2dual_process_fn
 
 class EmbeddingMixin:
     """
@@ -158,12 +157,10 @@ class NLL_MultiChunk(EmbeddingMixin):
         
 # --------------------------------------------------
 ALL_MODELS = sum((tuple(conf.pretrained_config_archive_map.keys()) for conf in (RobertaConfig,) if hasattr(conf, 'pretrained_config_archive_map')),(),)
-default_process_fn = triple_process_fn
 
 class MSMarcoConfig:
-    def __init__(self, name, model, process_fn=default_process_fn, use_mean=True, tokenizer_class=RobertaTokenizer, config_class=RobertaConfig):
+    def __init__(self, name, model, use_mean=True, tokenizer_class=RobertaTokenizer, config_class=RobertaConfig):
         self.name = name
-        self.process_fn = process_fn
         self.use_mean = use_mean
         # model config and tokenizer
         self.tokenizer_class = tokenizer_class
