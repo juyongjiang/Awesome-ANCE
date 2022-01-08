@@ -12,18 +12,12 @@ import transformers
 import torch.distributed as dist
 ##
 from data.msmarco_data import GetTrainingDataProcessingFn, GetTripletTrainingDataProcessingFn
-from utils.util import (
-    getattr_recursive,
-    set_seed,
-    StreamingDataset,
-    EmbeddingCache,
-    get_checkpoint_no,
-    get_latest_ann_data,
-    is_first_worker
-)
+from dataloader import EmbeddingCache, StreamingDataset
+from model.models import MSMarcoConfigDict, ALL_MODELS
+
+from utils.util import getattr_recursive, set_seed, get_checkpoint_no, get_latest_ann_data, is_first_worker
 from utils.lamb import Lamb
 from utils.eval_mrr import passage_dist_eval
-from model.models import MSMarcoConfigDict, ALL_MODELS
 ##
 from transformers import glue_processors as processors
 from transformers import (
@@ -411,7 +405,7 @@ def main():
     parser.add_argument("--output_dir", default="saved", type=str, help="The output directory where the model predictions and checkpoints will be written.",)
     # pretrained model
     parser.add_argument("--model_name_or_path", default="roberta-base", type=str, help="Path to pre-trained model or shortcut name selected in the list: " + ", ".join(ALL_MODELS),)
-    parser.add_argument("--do_lower_case", action="store_true", help="Set this flag if you are using an uncased model.",)
+    parser.add_argument("--do_lower_case", default=False, help="Set this flag if you are using an uncased model.",)
     # training setting
     parser.add_argument("--triplet", default=True, help="Whether to run training with (q, p_pos, p_neg).",)
     parser.add_argument("--max_seq_length", default=512, type=int, help="The maximum total input sequence length after tokenization. \

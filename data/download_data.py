@@ -7,7 +7,6 @@ import logging
 import os
 import pathlib
 import wget
-
 from typing import Tuple
 
 logger = logging.getLogger(__name__)
