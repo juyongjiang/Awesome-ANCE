@@ -21,47 +21,6 @@ def getattr_recursive(obj, name):
 def concat_key(all_list, key, axis=0):
     return np.concatenate([ele[key] for ele in all_list], axis=axis)
 
-def barrier_array_merge(args, data_array, merge_axis=0, prefix="", load_cache=False, only_load_in_master=False): # will be True
-    # data array: [B, any dimension]
-    # merge alone one axis
-    if args.local_rank == -1:
-        return data_array
-    if not load_cache:
-        rank = args.rank
-        if is_first_worker():
-            if not os.path.exists(args.output_dir):
-                os.makedirs(args.output_dir)
-        dist.barrier()  # directory created
-        # prefix="rank_data_obj_dev_query__emb_p_" or "rank_data_obj_passage__emb_p_" or "rank_data_obj_query__emb_p_"
-        pickle_path = os.path.join(args.output_dir, "{1}_data_obj_{0}.pb".format(str(rank), prefix))
-        with open(pickle_path, 'wb') as handle:
-            pickle.dump(data_array, handle, protocol=4)
-
-        # make sure all processes wrote their data before first process
-        # collects it
-        dist.barrier()
-    data_array = None
-    data_list = []
-    # return empty data
-    if only_load_in_master:
-        if not is_first_worker():
-            dist.barrier()
-            return None
-    # merging all data from multiple processings
-    # prefix="rank_data_obj_dev_query__emb_p_" or "rank_data_obj_passage__emb_p_" or "rank_data_obj_query__emb_p_"
-    for i in range(args.world_size):  # TODO: dynamically find the max instead of HardCode
-        pickle_path = os.path.join(args.output_dir, "{1}_data_obj_{0}.pb".format(str(i), prefix))
-        try:
-            with open(pickle_path, 'rb') as handle:
-                b = pickle.load(handle)
-                data_list.append(b)
-        except BaseException:
-            continue
-
-    data_array_agg = np.concatenate(data_list, axis=merge_axis)
-    dist.barrier()
-    return data_array_agg
-
 # to reuse pytrec_eval, id (keys) must be string
 # {query_id: {passage_id:rel, ...}, ...}
 def convert_to_string_id(result_dict):

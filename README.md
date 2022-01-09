@@ -85,7 +85,8 @@ python -m torch.distributed.launch --nproc_per_node=gpu_no inferencer.py \
         --training_dir {model checkpoint location} \ # if it is not existed, it will be pretrained checkpoint location automatically. 
         --model_type rdot_nll \
         --model_name_or_path roberta-base \
-        --ann_dir ann_data_dir
+        --ann_dir ann_data_dir \ 
+        --emb_dir embeddings_data_dir \ 
         --max_seq_length 512 \
         --max_query_length 64 \
         --per_gpu_eval_batch_size 16 \
@@ -99,8 +100,8 @@ The evaluation calculates full ranking and reranking metrics including **MRR, ND
 python eval_metrics.py      
         --raw_data_dir {The path of raw data dir} \
         --processed_data_dir {The path of preprocessed data dir} \
-        --checkpoint_path {Location for dumpped query and passage/document embeddings which is output_dir} \
-        --checkpoint {Embedding from which checkpoint(ie: 200000)} \
+        --emb_dir {Location for dumpped query and passage/document embeddings which is output_dir} \
+        --step_num {Embedding from which checkpoint(ie: 200000)} \
         --data_type {0 for document, 1 for passage} \
         --test_set {0 for dev_set, 1 for eval_set}
 ```

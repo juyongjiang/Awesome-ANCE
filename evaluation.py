@@ -11,22 +11,10 @@ import pytrec_eval
 import json
 from tqdm import tqdm 
 from utils.msmarco_eval import quality_checks_qids, compute_metrics, load_reference
+from utils.util import convert_to_string_id
 
-## Calculate Metrics
-def convert_to_string_id(result_dict):
-    string_id_dict = {}
-
-    # format [string, dict[string, val]]
-    for k, v in result_dict.items():
-        _temp_v = {}
-        for inner_k, inner_v in v.items():
-            _temp_v[str(inner_k)] = inner_v
-
-        string_id_dict[str(k)] = _temp_v
-
-    return string_id_dict
-
-def EvalDevQuery(query_embedding2id, passage_embedding2id, dev_query_positive_id, I_nearest_neighbor,topN):
+# query id [all_data_num, 1], passage id, positive id ({query_id: {passage_id:rel, ...}, ...}), retrieval topk id
+def EvalDevQuery(query_embedding2id, passage_embedding2id, dev_query_positive_id, I_nearest_neighbor, topN):
     prediction = {} #[qid][docid] = docscore, here we use -rank as score, so the higher the rank (1 > 2), the higher the score (-1 > -2)
     total = 0
     labeled = 0
@@ -51,7 +39,6 @@ def EvalDevQuery(query_embedding2id, passage_embedding2id, dev_query_positive_id
                 
         for idx in selected_ann_idx:
             pred_pid = passage_embedding2id[idx]
-            
             if not pred_pid in seen_pid:
                 # this check handles multiple vector per document
                 qids_to_ranked_candidate_passages[query_id][rank]=pred_pid
@@ -107,37 +94,34 @@ def EvalDevQuery(query_embedding2id, passage_embedding2id, dev_query_positive_id
 
     return final_ndcg, eval_query_cnt, final_Map, final_mrr, final_recall, hole_rate, ms_mrr, Ahole_rate, result, prediction
 
-def main():
-    parser = argparse.ArgumentParser()
-    ## required arguments
-    parser.add_argument("--raw_data_dir", default="./data/MSMARCO/", type=str, help="The path of raw data dir",)
-    parser.add_argument("--processed_data_dir", default="./data/MSMARCO/preprocessed", type=str, help="The path of preprocessed data dir",)
+def barrier_array_merge(args)
+    dev_query_embedding = []
+    dev_query_embedding2id = []
+    passage_embedding = []
+    passage_embedding2id = []
+    for i in range(args.gpu_num): # it should change the num according to the number of gpus in the training stage. 
+        try: # prefix="rank_data_obj_dev_query__emb_p_" or "rank_data_obj_passage__emb_p_" or "rank_data_obj_query__emb_p_"
+            with open(args.emb_dir + "dev_query_"+str(args.step_num)+"__emb_p__data_obj_"+str(i)+".pb", 'rb') as handle:
+                dev_query_embedding.append(pickle.load(handle))
+            with open(args.emb_dir + "dev_query_"+str(args.step_num)+"__embid_p__data_obj_"+str(i)+".pb", 'rb') as handle:
+                dev_query_embedding2id.append(pickle.load(handle))
+            with open(args.emb_dir + "passage_"+str(args.step_num)+"__emb_p__data_obj_"+str(i)+".pb", 'rb') as handle:
+                passage_embedding.append(pickle.load(handle))
+            with open(args.emb_dir + "passage_"+str(args.step_num)+"__embid_p__data_obj_"+str(i)+".pb", 'rb') as handle:
+                passage_embedding2id.append(pickle.load(handle))
+        except:
+            break
+    if (not dev_query_embedding) or (not dev_query_embedding2id) or (not passage_embedding) or not (passage_embedding2id):
+        print("No data found for checkpoint: ", args.step_num)
 
-    parser.add_argument("--checkpoint_path", default=None, type=str, help="Location for dumpped query and passage/document embeddings which is output_dir",)
-    parser.add_argument("--checkpoint", default=None, type=int, help="Embedding from which checkpoint(ie: 200000)",)
+    dev_query_embedding = np.concatenate(dev_query_embedding, axis=0)
+    dev_query_embedding2id = np.concatenate(dev_query_embedding2id, axis=0)
+    passage_embedding = np.concatenate(passage_embedding, axis=0)
+    passage_embedding2id = np.concatenate(passage_embedding2id, axis=0)
+    
+    return dev_query_embedding, dev_query_embedding2id, passage_embedding, passage_embedding2id
 
-    parser.add_argument("--data_type", default=None, type=int, help="0 for document, 1 for passage",)
-    parser.add_argument("--test_set", default=None, type=int, help="0 for dev_set, 1 for eval_set",)
-    args = parser.parse_args()
-
-    ## Load Qrel
-    if args.data_type == 0: # doc
-        topN = 100
-    else: # passage
-        topN = 1000
-    dev_query_positive_id = {}
-    # str(qid2offset[topicid]) + "\t" + str(pid2offset[docid]) + "\t" + rel + "\n"
-    query_positive_id_path = os.path.join(args.processed_data_dir, "dev-qrel.tsv")
-    with open(query_positive_id_path, 'r', encoding='utf8') as f:
-        tsvreader = csv.reader(f, delimiter="\t")
-        for [topicid, docid, rel] in tsvreader: # [topicid, docid, rel] is processing unique index not practical id
-            topicid = int(topicid)
-            docid = int(docid)
-            if topicid not in dev_query_positive_id:
-                dev_query_positive_id[topicid] = {}
-            dev_query_positive_id[topicid][docid] = int(rel) # {topici_id:{docid:rel, ...}, ...}
-
-    ## Prepare rerank data
+def prepare_rerank_data(args)
     qidmap_path = args.processed_data_dir + "/qid2offset.pickle" # {real_query_id: query_id, ...}
     pidmap_path = args.processed_data_dir + "/pid2offset.pickle" # {real_passage_id: passage_id, ...}
     # qidmap and pidmap, {raw_id: dataset_id, ...}
@@ -145,12 +129,12 @@ def main():
         qidmap = pickle.load(handle)
     with open(pidmap_path, 'rb') as handle:
         pidmap = pickle.load(handle)
-    
+
     # query data and passage data from raw data
     if args.data_type == 0:
         if args.test_set == 1:
             query_path = os.path.join(args.raw_data_dir, "doc/msmarco-test2019-queries.tsv") # 2019qrels-docs.txt
-            passage_path = os.path.join(args.raw_data_dir, "doc/msmarco-doctest2019-top100")
+            passage_path = os.path.join(args.raw_data_dir, "doc/msmarco-doctest2019-top100") # passage
         else:
             query_path = os.path.join(args.raw_data_dir, "doc/msmarco-docdev-queries.tsv")
             passage_path = os.path.join(args.raw_data_dir, "doc/msmarco-docdev-top100")
@@ -161,16 +145,15 @@ def main():
         else:
             query_path = os.path.join(args.raw_data_dir, "passage/queries.dev.small.tsv") # qrels.dev.small.tsv
             passage_path = os.path.join(args.raw_data_dir, "passage/top1000.dev")
-    
-    # load query data and get query id set  
+
+    bm25 = collections.defaultdict(set) # [(key, value[set]), ...]
+    # load query data and get query id set: practical id 
     qset = set()
     with gzip.open(query_path, 'rt', encoding='utf-8') if query_path[-2:] == "gz" else open(query_path, 'rt', encoding='utf-8') as f:
         tsvreader = csv.reader(f, delimiter="\t")
         for [qid, query] in tsvreader: # each query data
             qset.add(qid) # qset = {qid1, qid2, ...}
-
-    bm25 = collections.defaultdict(set) # [(key, value[set]), ...]
-    # passage data
+    # passage data (including qrel data)
     with gzip.open(passage_path, 'rt', encoding='utf-8') if passage_path[-2:] == "gz" else open(passage_path, 'rt', encoding='utf-8') as f:
         for line in tqdm(f):
             if args.data_type == 0:
@@ -182,31 +165,36 @@ def main():
             if qid in qset and int(qid) in qidmap: # int(qid) in qidmap means in qidmap.keys()
                 bm25[qidmap[int(qid)]].add(pidmap[int(pid)]) # [(qid_index, {passage_index}), ...]
     print("number of queries with " + str(topN) + " BM25 passages:", len(bm25))
+    return qidmap, pidmap, bm25
 
-    ## Calculate Metrics
-    dev_query_embedding = []
-    dev_query_embedding2id = []
-    passage_embedding = []
-    passage_embedding2id = []
-    for i in range(8):
-        try:
-            with open(args.checkpoint_path + "dev_query_"+str(args.checkpoint)+"__emb_p__data_obj_"+str(i)+".pb", 'rb') as handle:
-                dev_query_embedding.append(pickle.load(handle))
-            with open(args.checkpoint_path + "dev_query_"+str(args.checkpoint)+"__embid_p__data_obj_"+str(i)+".pb", 'rb') as handle:
-                dev_query_embedding2id.append(pickle.load(handle))
-            with open(args.checkpoint_path + "passage_"+str(args.checkpoint)+"__emb_p__data_obj_"+str(i)+".pb", 'rb') as handle:
-                passage_embedding.append(pickle.load(handle))
-            with open(args.checkpoint_path + "passage_"+str(args.checkpoint)+"__embid_p__data_obj_"+str(i)+".pb", 'rb') as handle:
-                passage_embedding2id.append(pickle.load(handle))
-        except:
-            break
-    if (not dev_query_embedding) or (not dev_query_embedding2id) or (not passage_embedding) or not (passage_embedding2id):
-        print("No data found for checkpoint: ", args.checkpoint)
+def main():
+    parser = argparse.ArgumentParser()
+    ## required arguments
+    parser.add_argument("--raw_data_dir", default="./data/MSMARCO/", type=str, help="The path of raw data dir",)
+    parser.add_argument("--processed_data_dir", default="./data/MSMARCO/preprocessed", type=str, help="The path of preprocessed data dir",)
+    parser.add_argument("--emb_dir", default="./data/MSMARCO/emb_data", type=str, help="Path of dumpped query and passage/document embeddings",)
+    parser.add_argument("--step_num", default=1000000, type=int, help="Embedding from which checkpoint(ie: 200000)",)
+    parser.add_argument("--gpu_num", default=4, type=int, help="The number of gpus in training stage.",)
+    parser.add_argument("--data_type", default=1, type=int, help="0 for document, 1 for passage",)
+    parser.add_argument("--test_set", default=0, type=int, help="0 for dev_set, 1 for eval_set",)
+    args = parser.parse_args()
 
-    dev_query_embedding = np.concatenate(dev_query_embedding, axis=0)
-    dev_query_embedding2id = np.concatenate(dev_query_embedding2id, axis=0)
-    passage_embedding = np.concatenate(passage_embedding, axis=0)
-    passage_embedding2id = np.concatenate(passage_embedding2id, axis=0)
+    topN = 100 if args.data_type == 0 else 1000
+    ## Load qrel file
+    dev_query_positive_id = {}
+    # str(qid2offset[topicid]) + "\t" + str(pid2offset[docid]) + "\t" + rel + "\n"
+    query_positive_id_path = os.path.join(args.processed_data_dir, "dev-qrel.tsv")
+    with open(query_positive_id_path, 'r', encoding='utf8') as f:
+        tsvreader = csv.reader(f, delimiter="\t")
+        for [topicid, docid, rel] in tsvreader: # [topicid, docid, rel] is processing unique index not practical id
+            topicid = int(topicid) # query id
+            docid = int(docid) # passage id
+            if topicid not in dev_query_positive_id:
+                dev_query_positive_id[topicid] = {} 
+            dev_query_positive_id[topicid][docid] = int(rel) # {topici_id:{docid:rel, ...}, ...} # rel=1
+
+    qidmap, pidmap, bm25 = prepare_rerank_data(args) # qidmap and pidmap: {raw_id: dataset_id, ...}, bm25:  [(qid_index, {passage_index}), ...]
+    dev_query_embedding, dev_query_embedding2id, passage_embedding, passage_embedding2id = barrier_array_merge(args)
 
     ## reranking metrics
     pidmap = collections.defaultdict(list)
@@ -246,7 +234,7 @@ def main():
 
         result = EvalDevQuery(dev_query_embedding2id, passage_embedding2id, dev_query_positive_id, all_dev_I, topN)
         final_ndcg, eval_query_cnt, final_Map, final_mrr, final_recall, hole_rate, ms_mrr, Ahole_rate, metrics, prediction = result
-        print("Reranking Results for checkpoint " + str(args.checkpoint))
+        print("Reranking Results for checkpoint " + str(args.step_num))
         print("Reranking NDCG@10:" + str(final_ndcg))
         print("Reranking map@10:" + str(final_Map))
         print("Reranking pytrec_mrr:" + str(final_mrr))
@@ -263,7 +251,7 @@ def main():
     _, dev_I = cpu_index.search(dev_query_embedding, topN)
     result = EvalDevQuery(dev_query_embedding2id, passage_embedding2id, dev_query_positive_id, dev_I, topN)
     final_ndcg, eval_query_cnt, final_Map, final_mrr, final_recall, hole_rate, ms_mrr, Ahole_rate, metrics, prediction = result
-    print("Results for checkpoint " + str(args.checkpoint))
+    print("Results for checkpoint " + str(args.step_num))
     print("NDCG@10:" + str(final_ndcg))
     print("map@10:" + str(final_Map))
     print("pytrec_mrr:" + str(final_mrr))

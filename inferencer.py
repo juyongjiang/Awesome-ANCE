@@ -16,7 +16,7 @@ import torch.distributed as dist
 ##
 from dataloader import GetProcessingFn, EmbeddingCache, StreamingDataset
 from models import MSMarcoConfigDict, ALL_MODELS
-from utils.util import barrier_array_merge, convert_to_string_id, is_first_worker, get_checkpoint_no, get_latest_ann_data
+from utils.util import convert_to_string_id, is_first_worker, get_checkpoint_no, get_latest_ann_data
 ##
 from transformers import (
     AdamW,
@@ -118,6 +118,46 @@ def EvalDevQuery(args, query_embedding2id, passage_embedding2id, dev_query_posit
 
     return final_ndcg, eval_query_cnt
 
+def barrier_array_merge(args, data_array, merge_axis=0, prefix="", load_cache=False, only_load_in_master=False): # will be True
+    # data array: [B, any dimension]
+    # merge alone one axis
+    if args.local_rank == -1:
+        return data_array
+    if not load_cache:
+        rank = args.rank
+        if is_first_worker():
+            if not os.path.exists(args.emb_dir):
+                os.makedirs(args.emb_dir)
+        dist.barrier()  # directory created
+        # prefix="rank_data_obj_dev_query__emb_p_" or "rank_data_obj_passage__emb_p_" or "rank_data_obj_query__emb_p_"
+        pickle_path = os.path.join(args.emb_dir, "{1}_data_obj_{0}.pb".format(str(rank), prefix))
+        with open(pickle_path, 'wb') as handle:
+            pickle.dump(data_array, handle, protocol=4)
+
+        # make sure all processes wrote their data before first process
+        # collects it
+        dist.barrier()
+    data_array = None
+    data_list = []
+    # return empty data
+    if only_load_in_master:
+        if not is_first_worker():
+            dist.barrier()
+            return None
+    # merging all data from multiple processings
+    # prefix="rank_data_obj_dev_query__emb_p_" or "rank_data_obj_passage__emb_p_" or "rank_data_obj_query__emb_p_"
+    for i in range(args.world_size):  # TODO: dynamically find the max instead of HardCode
+        pickle_path = os.path.join(args.emb_dir, "{1}_data_obj_{0}.pb".format(str(i), prefix))
+        try:
+            with open(pickle_path, 'rb') as handle:
+                b = pickle.load(handle)
+                data_list.append(b)
+        except BaseException:
+            continue
+    data_array_agg = np.concatenate(data_list, axis=merge_axis)
+    dist.barrier()
+    return data_array_agg
+
 def InferenceEmbeddingFromStreamDataLoader(args, model, train_dataloader, is_query_inference=True, prefix=""):
     # expect dataset from ReconstructTrainingSet
     results = {}
@@ -147,7 +187,6 @@ def InferenceEmbeddingFromStreamDataLoader(args, model, train_dataloader, is_que
                 embs = model.module.body_emb(**inputs)
 
         embs = embs.detach().cpu().numpy() # detach: avoid gradient backward anymore
-
         # check for multi chunk output for long sequence
         if len(embs.shape) == 3: # [batchS, chunk_factor, embeddingS]
             for chunk_no in range(embs.shape[1]):
@@ -435,6 +474,7 @@ def main():
     parser.add_argument("--model_type", default="rdot_nll", type=str, help="Model type selected in the list: " + ", ".join(MSMarcoConfigDict.keys()),)
     parser.add_argument("--model_name_or_path", default="roberta-base", type=str, help="Path to pre-trained model or shortcut name selected in the list: " + ", ".join(ALL_MODELS),)
     parser.add_argument("--ann_dir", default="./data/MSMARCO/ann_data", type=str, help="The output directory where the ANN data will be written",)
+    parser.add_argument("--emb_dir", default="./data/MSMARCO/emb_data", type=str, help="The output directory where the embeddings data will be written",)
     parser.add_argument("--max_seq_length", default=512, type=int, help="The maximum total input sequence length after tokenization. \
                                                         Sequences longer than this will be truncated, sequences shorter will be padded.",)
     parser.add_argument("--max_query_length", default=64, type=int, help="The maximum total input sequence length after tokenization. \

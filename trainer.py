@@ -418,7 +418,7 @@ def main():
     parser.add_argument("--per_gpu_eval_batch_size", default=8, type=int, help="Batch size per GPU/CPU for evaluation.",)
     parser.add_argument("--max_steps", default=1000000, type=int, help="If > 0: set total number of training steps to perform",)
     parser.add_argument("--save_steps", type=int, default=10000, help="Save checkpoint every X updates steps.",)
-    parser.add_argument("--eval_steps", type=int, default=200, help="Log every X updates steps.",)
+    parser.add_argument("--eval_steps", type=int, default=5000, help="Log every X updates steps.",)
     # optimizer
     parser.add_argument("--optimizer", default="lamb", type=str, help="Optimizer - lamb or adamW",)
     parser.add_argument("--warmup_steps", default=5000, type=int, help="Linear warmup over warmup_steps.",)
