@@ -132,7 +132,7 @@ def train(args, model, tokenizer, query_cache, passage_cache):
             # ann_no: latest generated ann data index; 
             # ann_path: the path of training ann file [qid, pos_id, neg_id]; 
             # ndcg_json: a dict of checkpoint path info
-            ann_no, ann_path, ndcg_json = get_latest_ann_data(args.ann_dir)
+            ann_no, ann_path, ndcg_json = get_latest_ann_data(args.ann_dir) # if not exists, return -1, None, None
             # last_ann_no uses for judging whether it has got all the ann data
             if ann_path is not None and ann_no != last_ann_no:
                 logger.info("Training on new ann data at %d with ann_training_data_%d", step, ann_no)

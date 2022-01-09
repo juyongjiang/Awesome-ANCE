@@ -178,7 +178,7 @@ def StreamInferenceDoc(args, model, fn, prefix, f, is_query_inference=True): # f
                                                                        prefix=prefix)
 
     logger.info("merging embeddings from multiple processings")
-    # preserve to memory
+    # preserve to memory, prefix="dev_query__emb_p_" or "passage__emb_p_" or "query__emb_p_"
     full_embedding = barrier_array_merge(args, _embedding, prefix=prefix + "_emb_p_", load_cache=False, only_load_in_master=True)
     full_embedding2id = barrier_array_merge(args, _embedding2id, prefix=prefix + "_embid_p_", load_cache=False, only_load_in_master=True)
 
@@ -283,7 +283,7 @@ def generate_new_ann(args, output_num, checkpoint_path, training_query_positive_
         query_embedding = query_embedding[q_start_idx:q_end_idx]
         query_embedding2id = query_embedding2id[q_start_idx:q_end_idx]
         logger.info("Chunked {} query from {}".format(len(query_embedding), num_queries))
-
+        #---------------------------------------------------negative samples generation--------------------------------------------------------------- 
         # I: [number of queries, topk]
         _, I = cpu_index.search(query_embedding, top_k) # I: [query_embedding.shape[0], 100 (passage id)]
         effective_q_id = set(query_embedding2id.flatten())
@@ -295,14 +295,17 @@ def generate_new_ann(args, output_num, checkpoint_path, training_query_positive_
                                                             I,
                                                             effective_q_id)
 
+        #-------------------------------------------------------new ann data generation--------------------------------------------------------
         logger.info("***** Construct ANN Triplet *****")
+        # ann_dir/ann_training_data_[output_num]-(query_id, pos_pid, neg_pid)
+        # ann_dir/ann_ndcg_[output_num]-({ndcg: dev_ndcg (ndcg results from dev dataset), checkpoint: checkpoint_path (current checkpoint used for generation)})
         train_data_output_path = os.path.join(args.ann_dir, "ann_training_data_" + str(output_num))
         with open(train_data_output_path, 'w') as f:
             query_range = list(range(I.shape[0])) # [0, 1, 2, ..., queries_per_chunk-1]
             random.shuffle(query_range)
             for query_idx in query_range:
                 query_id = query_embedding2id[query_idx]
-                # training_query_positive_id, {query_id: passage_id, ...}
+                # training_query_positive_id: {query_id: passage_id, ...}, query_negative_passage: {query_id: negative_passage_id, ...}
                 if query_id not in effective_q_id or query_id not in training_query_positive_id:
                     continue
                 pos_pid = training_query_positive_id[query_id]
@@ -311,7 +314,7 @@ def generate_new_ann(args, output_num, checkpoint_path, training_query_positive_
         ndcg_output_path = os.path.join(args.ann_dir, "ann_ndcg_" + str(output_num))
         with open(ndcg_output_path, 'w') as f:
             json.dump({'ndcg': dev_ndcg, 'checkpoint': checkpoint_path}, f) # checkpoint_path, saved/checkpint-[step_no]
-
+        #---------------------------------------------------------------------------------------------------------------------------------------
         return dev_ndcg, num_queries_dev
 
 def get_latest_checkpoint(args):
@@ -364,7 +367,7 @@ def ann_data_gen(args):
     # ann_no: latest generated ann data index; 
     # ann_path: the path of training ann file [qid, pos_id, neg_id]; 
     # ndcg_json: a dict of checkpoint path info
-    ann_no, ann_path, ndcg_json = get_latest_ann_data(args.ann_dir)
+    ann_no, ann_path, ndcg_json = get_latest_ann_data(args.ann_dir) # we only need ann_no for record the next generation no. 
     output_num = ann_no + 1 # for this time generation
     if is_first_worker():
         if not os.path.exists(args.ann_dir):
@@ -372,11 +375,11 @@ def ann_data_gen(args):
     # positive id for train and dev dataset
     # {query_id: passage_id, ...}, {query_id: {passage_id:rel, ...}, ...}
     training_positive_id, dev_positive_id = load_positive_ids(args)
-    last_checkpoint = "" #
+    last_checkpoint = args.init_model_dir #
     while args.end_output_num == -1 or output_num <= args.end_output_num:
         # get latest DR model checkpoint path
         # saved/checkpint-[step_no], [step_no]
-        next_checkpoint, latest_step_num = get_latest_checkpoint(args)
+        next_checkpoint, latest_step_num = get_latest_checkpoint(args) # if not, args.init_model_dir, 0
 
         if next_checkpoint == last_checkpoint:
             time.sleep(60) # avoid repeatly generation
@@ -428,7 +431,7 @@ def main():
     # Required parameters
     parser.add_argument("--data_dir", default="./data/MSMARCO/preprocessed", type=str, help="The preprocessed data dir.",)
     parser.add_argument("--training_dir", default="./saved", type=str, help="Training dir for latest checkpoint dir in here",)
-    parser.add_argument("--init_model_dir", default=None, type=str, help="Initial model dir, will use this if no checkpoint is found in training_dir",)
+    parser.add_argument("--init_model_dir", default="", type=str, help="Initial model dir, will use this if no checkpoint is found in training_dir",)
 
     parser.add_argument("--model_type", default="rdot_nll", type=str, help="Model type selected in the list: " + ", ".join(MSMarcoConfigDict.keys()),)
     parser.add_argument("--model_name_or_path", default="roberta-base", type=str, help="Path to pre-trained model or shortcut name selected in the list: " + ", ".join(ALL_MODELS),)
