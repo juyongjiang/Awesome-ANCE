@@ -10,55 +10,98 @@ import os
 import pytrec_eval
 import json
 from tqdm import tqdm 
-from utils.msmarco_eval import quality_checks_qids, compute_metrics, load_reference
+from utils.msmarco_eval import compute_metrics
 from utils.util import convert_to_string_id
 
+def compute_metrics(qids_to_relevant_passageids, qids_to_ranked_candidate_passages):
+    """Compute MRR metric
+    Args:    
+    p_qids_to_relevant_passageids (dict): dictionary of query-passage mapping
+        Dict as read in with load_reference or load_reference_from_stream
+    p_qids_to_ranked_candidate_passages (dict): dictionary of query-passage candidates
+    Returns:
+        dict: dictionary of metrics {'MRR': <MRR Score>}
+    """
+    all_scores = {}
+    MRR = 0
+    qids_with_relevant_passages = 0
+    ranking = []
+    for qid in qids_to_ranked_candidate_passages:
+        if qid in qids_to_relevant_passageids:
+            ranking.append(0)
+            target_pid = qids_to_relevant_passageids[qid]
+            candidate_pid = qids_to_ranked_candidate_passages[qid]
+            for i in range(0, MaxMRRRank): # MaxMRRRank = 10
+                if candidate_pid[i] in target_pid:
+                    MRR += 1/(i + 1)
+                    ranking.pop()
+                    ranking.append(i+1)
+                    break
+    if len(ranking) == 0:
+        raise IOError("No matching QIDs found. Are you sure you are scoring the evaluation set?")
+    
+    MRR = MRR/len(qids_to_relevant_passageids)
+    all_scores['MRR @10'] = MRR
+    all_scores['QueriesRanked'] = len(qids_to_ranked_candidate_passages)
+    return all_scores
+
 # query id [all_data_num, 1], passage id, positive id ({query_id: {passage_id:rel, ...}, ...}), retrieval topk id
-def EvalDevQuery(query_embedding2id, passage_embedding2id, dev_query_positive_id, I_nearest_neighbor, topN):
+def EvalDevQuery(dev_query_embedding2id, passage_embedding2id, dev_query_positive_id, I_nearest_neighbor, topN):
     prediction = {} #[qid][docid] = docscore, here we use -rank as score, so the higher the rank (1 > 2), the higher the score (-1 > -2)
     total = 0
-    labeled = 0
+    labeled = 0 # 
     Atotal = 0
-    Alabeled = 0
+    Alabeled = 0 # how many results are incorrect
     qids_to_ranked_candidate_passages = {} 
-    for query_idx in range(len(I_nearest_neighbor)): 
+    for query_idx in range(len(I_nearest_neighbor)): # [len(dev_query_embedding2id), topk], dev_query_embedding2id: [all_query, 1]
         seen_pid = set()
-        query_id = query_embedding2id[query_idx]
+        query_id = dev_query_embedding2id[query_idx]
         prediction[query_id] = {}
-
         top_ann_pid = I_nearest_neighbor[query_idx].copy()
-        selected_ann_idx = top_ann_pid[:topN]
+        selected_ann_idx = top_ann_pid[:topN] # topN ann pid
         rank = 0
-        
         if query_id in qids_to_ranked_candidate_passages:
             pass    
         else:
             # By default, all PIDs in the list of 1000 are 0. Only override those that are given
             tmp = [0] * 1000
-            qids_to_ranked_candidate_passages[query_id] = tmp
-                
+            qids_to_ranked_candidate_passages[query_id] = tmp       
         for idx in selected_ann_idx:
-            pred_pid = passage_embedding2id[idx]
+            pred_pid = passage_embedding2id[idx] # get passage index
             if not pred_pid in seen_pid:
                 # this check handles multiple vector per document
                 qids_to_ranked_candidate_passages[query_id][rank]=pred_pid
                 Atotal += 1
-                if pred_pid not in dev_query_positive_id[query_id]:
+                if pred_pid not in dev_query_positive_id[query_id]: # not in positive id, it is incorrect
                     Alabeled += 1
                 if rank < 10:
                     total += 1
                     if pred_pid not in dev_query_positive_id[query_id]:
-                        labeled += 1
+                        labeled += 1  # 
                 rank += 1
                 prediction[query_id][pred_pid] = -rank
                 seen_pid.add(pred_pid)
-
+    #-------------------------------------------------------------------------------------------------------------------
     # use out of the box evaluation script
+    # to reuse pytrec_eval, id (keys) must be string
     evaluator = pytrec_eval.RelevanceEvaluator(convert_to_string_id(dev_query_positive_id), {'map_cut', 'ndcg_cut', 'recip_rank','recall'})
-
     eval_query_cnt = 0
-    result = evaluator.evaluate(convert_to_string_id(prediction))
-    
+    result = evaluator.evaluate(convert_to_string_id(prediction)) # positive id ({query_id: {passage_id:rel, ...}, ...})
+    ndcg = 0
+    Map = 0
+    mrr = 0
+    recall = 0
+    for k in result.keys():
+        eval_query_cnt += 1
+        ndcg += result[k]["ndcg_cut_10"]
+        Map += result[k]["map_cut_10"]
+        mrr += result[k]["recip_rank"]
+        recall += result[k]["recall_"+str(topN)]
+    final_ndcg = ndcg / eval_query_cnt
+    final_Map = Map / eval_query_cnt
+    final_mrr = mrr / eval_query_cnt
+    final_recall = recall / eval_query_cnt
+    #-------------------------------------------------------------------------------------------------------------------
     qids_to_relevant_passageids = {}
     for qid in dev_query_positive_id:
         qid = int(qid)
@@ -67,30 +110,14 @@ def EvalDevQuery(query_embedding2id, passage_embedding2id, dev_query_positive_id
         else:
             qids_to_relevant_passageids[qid] = []
             for pid in dev_query_positive_id[qid]:
-                if pid>0:
-                    qids_to_relevant_passageids[qid].append(pid)
+                if pid > 0:
+                    qids_to_relevant_passageids[qid].append(pid) # 
             
     ms_mrr = compute_metrics(qids_to_relevant_passageids, qids_to_ranked_candidate_passages)
-
-    ndcg = 0
-    Map = 0
-    mrr = 0
-    recall = 0
-    recall_1000 = 0
-
-    for k in result.keys():
-        eval_query_cnt += 1
-        ndcg += result[k]["ndcg_cut_10"]
-        Map += result[k]["map_cut_10"]
-        mrr += result[k]["recip_rank"]
-        recall += result[k]["recall_"+str(topN)]
-
-    final_ndcg = ndcg / eval_query_cnt
-    final_Map = Map / eval_query_cnt
-    final_mrr = mrr / eval_query_cnt
-    final_recall = recall / eval_query_cnt
+    #-------------------------------------------------------------------------------------------------------------------
     hole_rate = labeled/total
-    Ahole_rate = Alabeled/Atotal
+    Ahole_rate = Alabeled/Atotal # hole incorrect pid results (not be retrieved)
+    #-------------------------------------------------------------------------------------------------------------------
 
     return final_ndcg, eval_query_cnt, final_Map, final_mrr, final_recall, hole_rate, ms_mrr, Ahole_rate, result, prediction
 
@@ -121,10 +148,10 @@ def barrier_array_merge(args)
     
     return dev_query_embedding, dev_query_embedding2id, passage_embedding, passage_embedding2id
 
-def prepare_rerank_data(args)
+def prepare_rerank_data(args, raw_data_dir)
     qidmap_path = args.processed_data_dir + "/qid2offset.pickle" # {real_query_id: query_id, ...}
     pidmap_path = args.processed_data_dir + "/pid2offset.pickle" # {real_passage_id: passage_id, ...}
-    # qidmap and pidmap, {raw_id: dataset_id, ...}
+    # qidmap and pidmap: {raw_id: dataset_id, ...}
     with open(qidmap_path, 'rb') as handle:
         qidmap = pickle.load(handle)
     with open(pidmap_path, 'rb') as handle:
@@ -133,18 +160,18 @@ def prepare_rerank_data(args)
     # query data and passage data from raw data
     if args.data_type == 0:
         if args.test_set == 1:
-            query_path = os.path.join(args.raw_data_dir, "doc/msmarco-test2019-queries.tsv") # 2019qrels-docs.txt
-            passage_path = os.path.join(args.raw_data_dir, "doc/msmarco-doctest2019-top100") # passage
+            query_path = os.path.join(raw_data_dir, "doc/msmarco-test2019-queries.tsv") # 2019qrels-docs.txt
+            passage_path = os.path.join(raw_data_dir, "doc/msmarco-doctest2019-top100") # passage
         else:
-            query_path = os.path.join(args.raw_data_dir, "doc/msmarco-docdev-queries.tsv")
-            passage_path = os.path.join(args.raw_data_dir, "doc/msmarco-docdev-top100")
+            query_path = os.path.join(raw_data_dir, "doc/msmarco-docdev-queries.tsv")
+            passage_path = os.path.join(raw_data_dir, "doc/msmarco-docdev-top100")
     else:
         if args.test_set == 1:
-            query_path = os.path.join(args.raw_data_dir, "doc/msmarco-test2019-queries.tsv") # 2019qrels-docs.txt
-            passage_path = os.path.join(args.raw_data_dir, "doc/msmarco-passagetest2019-top1000.tsv")
+            query_path = os.path.join(raw_data_dir, "doc/msmarco-test2019-queries.tsv") # 2019qrels-docs.txt
+            passage_path = os.path.join(raw_data_dir, "doc/msmarco-passagetest2019-top1000.tsv")
         else:
-            query_path = os.path.join(args.raw_data_dir, "passage/queries.dev.small.tsv") # qrels.dev.small.tsv
-            passage_path = os.path.join(args.raw_data_dir, "passage/top1000.dev")
+            query_path = os.path.join(raw_data_dir, "passage/queries.dev.small.tsv") # qrels.dev.small.tsv
+            passage_path = os.path.join(raw_data_dir, "passage/top1000.dev")
 
     bm25 = collections.defaultdict(set) # [(key, value[set]), ...]
     # load query data and get query id set: practical id 
@@ -165,7 +192,21 @@ def prepare_rerank_data(args)
             if qid in qset and int(qid) in qidmap: # int(qid) in qidmap means in qidmap.keys()
                 bm25[qidmap[int(qid)]].add(pidmap[int(pid)]) # [(qid_index, {passage_index}), ...]
     print("number of queries with " + str(topN) + " BM25 passages:", len(bm25))
-    return qidmap, pidmap, bm25
+    return bm25
+
+def get_dev_query_pos_id(args, processed_data_dir):
+    dev_query_positive_id = {}
+    # str(qid2offset[topicid]) + "\t" + str(pid2offset[docid]) + "\t" + rel + "\n"
+    query_positive_id_path = os.path.join(processed_data_dir, "dev-qrel.tsv")
+    with open(query_positive_id_path, 'r', encoding='utf8') as f:
+        tsvreader = csv.reader(f, delimiter="\t")
+        for [topicid, docid, rel] in tsvreader: # [topicid, docid, rel] is processing unique index not practical id
+            topicid = int(topicid) # query id
+            docid = int(docid) # passage id
+            if topicid not in dev_query_positive_id:
+                dev_query_positive_id[topicid] = {} 
+            dev_query_positive_id[topicid][docid] = int(rel) # {topici_id:{docid:rel, ...}, ...} # rel=1
+    return dev_query_positive_id
 
 def main():
     parser = argparse.ArgumentParser()
@@ -180,23 +221,15 @@ def main():
     args = parser.parse_args()
 
     topN = 100 if args.data_type == 0 else 1000
-    ## Load qrel file
-    dev_query_positive_id = {}
-    # str(qid2offset[topicid]) + "\t" + str(pid2offset[docid]) + "\t" + rel + "\n"
-    query_positive_id_path = os.path.join(args.processed_data_dir, "dev-qrel.tsv")
-    with open(query_positive_id_path, 'r', encoding='utf8') as f:
-        tsvreader = csv.reader(f, delimiter="\t")
-        for [topicid, docid, rel] in tsvreader: # [topicid, docid, rel] is processing unique index not practical id
-            topicid = int(topicid) # query id
-            docid = int(docid) # passage id
-            if topicid not in dev_query_positive_id:
-                dev_query_positive_id[topicid] = {} 
-            dev_query_positive_id[topicid][docid] = int(rel) # {topici_id:{docid:rel, ...}, ...} # rel=1
 
-    qidmap, pidmap, bm25 = prepare_rerank_data(args) # qidmap and pidmap: {raw_id: dataset_id, ...}, bm25:  [(qid_index, {passage_index}), ...]
-    dev_query_embedding, dev_query_embedding2id, passage_embedding, passage_embedding2id = barrier_array_merge(args)
+    dev_query_positive_id = get_dev_query_pos_id(args, args.processed_data_dir) # {topici_id:{docid:rel, ...}, ...} # rel=1
+    bm25 = prepare_rerank_data(args, args.raw_data) # bm25:  [(qid_index, {passage_index}), ...]
+    dev_query_embedding, dev_query_embedding2id, passage_embedding, passage_embedding2id = barrier_array_merge(args) # [all_data_num, embeddingS], # [all_data_num, 1]
 
-    ## reranking metrics
+    '''
+        reranking metrics
+    '''
+    # dataset index -> rele pos (val)
     pidmap = collections.defaultdict(list)
     for i in range(len(passage_embedding2id)):
         pidmap[passage_embedding2id[i]].append(i)  # abs pos(key) to rele pos(val)
@@ -208,31 +241,31 @@ def main():
         all_dev_I = []
         for i, qid in enumerate(dev_query_embedding2id):
             p_set = []
-            p_set_map = {}
-            if qid not in bm25: # qid is processing index of dataset
+            p_set_map = {} # {}
+            if qid not in bm25: # qid is processing index of dataset, bm25:  [(qid_index, {passage_index}), ...]
                 print(qid, "not in bm25")
             else:
                 count = 0
                 for k, pid in enumerate(bm25[qid]): # the qid with many relevant qid, both are index of dataset
-                    if pid in pidmap:
-                        for val in pidmap[pid]:
+                    if pid in pidmap: # pid in passage_embedding
+                        for val in pidmap[pid]: # val is rel index
                             p_set.append(passage_embedding[val])
                             p_set_map[count] = val # new rele pos(key) to old rele pos(val)
                             count += 1
                     else:
                         print(pid, "not in passages")
-            
+            #-------------------------------------------------------------------------------------------------
             dim = passage_embedding.shape[1] # hidden dim
             faiss.omp_set_num_threads(16)
             cpu_index = faiss.IndexFlatIP(dim) # get the index for dense embedding
             p_set =  np.asarray(p_set)
             cpu_index.add(p_set)    
-            _, dev_I = cpu_index.search(dev_query_embedding[i:i+1], len(p_set))
-            for j in range(len(dev_I[0])):
+            _, dev_I = cpu_index.search(dev_query_embedding[i:i+1], len(p_set)) # topk=len(p_set)
+            for j in range(len(dev_I[0])): # [tokp] or len(p_set)
                 dev_I[0][j] = p_set_map[dev_I[0][j]]
             all_dev_I.append(dev_I[0])
-
-        result = EvalDevQuery(dev_query_embedding2id, passage_embedding2id, dev_query_positive_id, all_dev_I, topN)
+        # pytrec_eval
+        result = EvalDevQuery(dev_query_embedding2id, passage_embedding2id, dev_query_positive_id, all_dev_I, topN) # topN = 100 if args.data_type == 0 else 1000
         final_ndcg, eval_query_cnt, final_Map, final_mrr, final_recall, hole_rate, ms_mrr, Ahole_rate, metrics, prediction = result
         print("Reranking Results for checkpoint " + str(args.step_num))
         print("Reranking NDCG@10:" + str(final_ndcg))
@@ -243,12 +276,15 @@ def main():
         print("Reranking hole rate:" + str(Ahole_rate))
         print("Reranking ms_mrr:" + str(ms_mrr))
 
-    ## full ranking metrics
+    '''
+        full ranking metrics
+    '''
     dim = passage_embedding.shape[1]
     faiss.omp_set_num_threads(16)
     cpu_index = faiss.IndexFlatIP(dim)
     cpu_index.add(passage_embedding) 
-    _, dev_I = cpu_index.search(dev_query_embedding, topN)
+    _, dev_I = cpu_index.search(dev_query_embedding, topN) # topN = 100 if args.data_type == 0 else 1000
+    # pytrec_eval
     result = EvalDevQuery(dev_query_embedding2id, passage_embedding2id, dev_query_positive_id, dev_I, topN)
     final_ndcg, eval_query_cnt, final_Map, final_mrr, final_recall, hole_rate, ms_mrr, Ahole_rate, metrics, prediction = result
     print("Results for checkpoint " + str(args.step_num))
