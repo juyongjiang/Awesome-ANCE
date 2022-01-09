@@ -5,7 +5,6 @@ import torch.distributed as dist
 import gzip
 import faiss
 import numpy as np
-from utils.process_fn import dual_process_fn
 from tqdm import tqdm
 import torch
 import os
@@ -96,6 +95,41 @@ def get_topk_restricted(q_emb, psg_emb_arr, pid_dict, psg_ids, pid_subset, top_k
         _D, _I = search_knn(q_emb, sub_emb, top_k, distance_type=faiss.METRIC_INNER_PRODUCT)
         return _D.squeeze(), psg_ids[subset_ix[_I]].squeeze()  # (top_k,)
 
+def pad_ids(input_ids, attention_mask, token_type_ids, max_length, pad_token, mask_padding_with_zero, pad_token_segment_id, pad_on_left=False):
+    padding_length = max_length - len(input_ids)
+    if pad_on_left:
+        input_ids = ([pad_token] * padding_length) + input_ids
+        attention_mask = ([0 if mask_padding_with_zero else 1] * padding_length) + attention_mask
+        token_type_ids = ([pad_token_segment_id] * padding_length) + token_type_ids
+    else:
+        input_ids += [pad_token] * padding_length
+        attention_mask += [0 if mask_padding_with_zero else 1] * padding_length
+        token_type_ids += [pad_token_segment_id] * padding_length
+
+    return input_ids, attention_mask, token_type_ids
+
+def dual_process_fn(line, i, tokenizer, args):
+    features = []
+    cells = line.split("\t")
+    if len(cells) == 2:
+        # this is for training and validation
+        # id, passage = line
+        mask_padding_with_zero = True
+        pad_token_segment_id = 0
+        pad_on_left = False
+
+        text = cells[1].strip()
+        input_id_a = tokenizer.encode(text, add_special_tokens=True, max_length=args.max_seq_length,)
+        token_type_ids_a = [0] * len(input_id_a)
+        attention_mask_a = [1 if mask_padding_with_zero else 0] * len(input_id_a)
+        input_id_a, attention_mask_a, token_type_ids_a = pad_ids(input_id_a, attention_mask_a, token_type_ids_a, args.max_seq_length, tokenizer.pad_token_id, mask_padding_with_zero, pad_token_segment_id, pad_on_left)
+        features += [torch.tensor(input_id_a, dtype=torch.int), torch.tensor(attention_mask_a, dtype=torch.bool), torch.tensor(token_type_ids_a, dtype=torch.uint8)]
+        qid = int(cells[0])
+        features.append(qid)
+    else:
+        raise Exception(
+            "Line doesn't have correct length: {0}. Expected 2.".format(str(len(cells))))
+    return [features]
 
 def passage_dist_eval(args, model, tokenizer):
     base_path = args.data_dir
