@@ -28,8 +28,8 @@ from transformers import (
     RobertaModel,
 )
 from torch import nn
-from tqdm import tqdm, trange
-from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, TensorDataset
+from tqdm import tqdm
+from torch.utils.data import DataLoader
 from os.path import isfile, join
 torch.multiprocessing.set_sharing_strategy('file_system')
 
@@ -429,13 +429,13 @@ def set_env(args):
 def main():
     parser = argparse.ArgumentParser()
     # Required parameters
-    parser.add_argument("--data_dir", default="./data/MSMARCO/preprocessed", type=str, help="The preprocessed data dir.",)
+    parser.add_argument("--data_dir", default="./data/MSMARCO/preprocessed", type=str, help="The preprocessed data dir",)
     parser.add_argument("--training_dir", default="./saved", type=str, help="Training dir for latest checkpoint dir in here",)
     parser.add_argument("--init_model_dir", default="", type=str, help="Initial model dir, will use this if no checkpoint is found in training_dir",)
 
     parser.add_argument("--model_type", default="rdot_nll", type=str, help="Model type selected in the list: " + ", ".join(MSMarcoConfigDict.keys()),)
     parser.add_argument("--model_name_or_path", default="roberta-base", type=str, help="Path to pre-trained model or shortcut name selected in the list: " + ", ".join(ALL_MODELS),)
-    parser.add_argument("--ann_dir", default="./data/MSMARCO/ann_dir", type=str, help="The output directory where the ANN data will be written",)
+    parser.add_argument("--ann_dir", default="./data/MSMARCO/ann_data", type=str, help="The output directory where the ANN data will be written",)
     parser.add_argument("--max_seq_length", default=128, type=int, help="The maximum total input sequence length after tokenization. \
                                                         Sequences longer than this will be truncated, sequences shorter will be padded.",)
     parser.add_argument("--max_query_length", default=64, type=int, help="The maximum total input sequence length after tokenization. \
