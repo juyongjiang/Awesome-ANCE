@@ -3,15 +3,9 @@
 This repo provides personal implementation of paper [Approximate Nearest Neighbor Negative Contrastive Learning for Dense Text Retrieval](https://arxiv.org/pdf/2007.00808.pdf) in a simplified way. The code is refered to official version of [ANCE](https://github.com/microsoft/ANCE).
 
 <p align="center">
-  <img src="data/ance.png" alt="ANCE" width="500">
+  <img src="data/ance.png" alt="ANCE" width="800">
   <br>
   <b>Figure 1.</b> ANCE Asynchronous Training
-</p>
-
-<p align="center">
-  <img src="data/ance_john.png" alt="ANCE" width="800">
-  <br>
-  <b>Figure 2.</b> ANCE Code Implementation
 </p>
 <!-- The architecture of data is as follows:
 ```bash
