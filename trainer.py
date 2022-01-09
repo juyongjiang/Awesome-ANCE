@@ -415,6 +415,7 @@ def main():
                                             Sequences longer than this will be truncated, sequences shorter will be padded.",)
     parser.add_argument("--evaluate_during_training", default=True, help="Rul evaluation during training at each logging step.",)
     parser.add_argument("--per_gpu_train_batch_size", default=8, type=int, help="Batch size per GPU/CPU for training.",)
+    parser.add_argument("--per_gpu_eval_batch_size", default=8, type=int, help="Batch size per GPU/CPU for evaluation.",)
     parser.add_argument("--max_steps", default=1000000, type=int, help="If > 0: set total number of training steps to perform",)
     parser.add_argument("--save_steps", type=int, default=10000, help="Save checkpoint every X updates steps.",)
     parser.add_argument("--eval_steps", type=int, default=200, help="Log every X updates steps.",)

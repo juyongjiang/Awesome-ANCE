@@ -8,7 +8,7 @@ This repo provides personal implementation of paper [Approximate Nearest Neighbo
   <b>Figure 1.</b> ANCE Asynchronous Training
 </p>
 
-The architecture of data is as follows:
+<!-- The architecture of data is as follows:
 ```bash
 ANCE
 |--data
@@ -16,7 +16,7 @@ ANCE
         |--doc        # raw data
         |--passage    # raw data
         |--ann_data_* # preprocessed data (*_split* files have been removed)
-```
+``` -->
 
 ## Environment
 ```bash
@@ -49,7 +49,7 @@ python data/msmarco_data.py 
         --data_type {use 1 for passage, 0 for document}
 ```
 
-## BM25 Initial ANN Data
+### BM25 Initial ANN Data
 ```bash
 python data/bm25_data.py
         --raw_data_dir raw_data_dir \
@@ -58,40 +58,30 @@ python data/bm25_data.py
         --negative_sample {default=1}
 ```
 ## Trainer
-To train dense retrieval (DR) model(s), e.g. BERT-Siamese, that encodes the query or document to *dense embeddings*. run `train_bm25_warmup.py` to train BM25 model as pretrained model which will be used to generate initial ANN data (step [2]), termed warmup processing. run `train_bert_ance.py` to start train dense retrieval (DR) model with ANCE Negatives sampleing strategy. ANCE training will use the most recently generated ANN data, the command is as follow:**
+Training dense retrieval (DR) model(s), e.g. BERT-Siamese, to encode the query and document/passage to *dense embeddings* with ANCE Negatives sampling learning strategy. ANCE training will use the most recent model checkpoint to update ANN data. The command is as follow:
 ```bash
-python -m torch.distributed.launch --nproc_per_node=1 
-        train_bm25_warmup.py \
+python -m torch.distributed.launch --nproc_per_node=1 trainer.py \
         --task_name MSMarco \
         --model_type rdot_nll \
         --model_name_or_path roberta-base \
         --data_dir {location of your preprocessed data}  
         --ann_dir {location of the ANN generated training data}
         --output_dir {location for checkpoint saving} \
-
-        --evaluate_during_training \
         --max_seq_length 512 
-        --per_gpu_eval_batch_size=256 \
-        --per_gpu_train_batch_size=32 \
-        --learning_rate 2e-4  \
-        --logging_steps 100   \
-        --num_train_epochs 2.0  \
-        --warmup_steps 1000  \
-        --overwrite_output_dir \
-        --save_steps 30000 \
+        --per_gpu_eval_batch_size 256 \
+        --per_gpu_train_batch_size 32 \
+        --learning_rate 1e-6  \
+        --max_steps 1000000 \
+        --save_steps 10000 \
         --gradient_accumulation_steps 1 \
-        --expected_train_size 35000000 \
-        --logging_steps_per_eval 1 \
         --fp16 \
         --optimizer lamb \
-        --log_dir ./tensorboard/logs/OSpass
         --data_type {use 1 for passage, 0 for document}
 ```
 ## Inferencer
-run `ann_data_gen.py` to initial ANN data generation, this step will use the BM25 generate the initial training data. The command is as follow: Once training starts, start another job in parallel to fetch the latest checkpoint from the ongoing training and update the training data. To do that, run**
+Once training start, starting another job in parallel to fetch the latest checkpoint from the ongoing training and update the training data (ANN data). To do that, run**
 ```bash
-python -m torch.distributed.launch --nproc_per_node=gpu_no 
-        ann_data_gen.py \
+python -m torch.distributed.launch --nproc_per_node=gpu_no inferencer.py \
         --training_dir {model checkpoint location} \ # if it is not existed, it will be pretrained checkpoint location automatically. 
         --init_model_dir {pretrained BM25 warmup checkpoint location} \ 
         --model_type rdot_nll \
