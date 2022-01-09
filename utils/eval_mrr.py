@@ -99,16 +99,16 @@ def get_topk_restricted(q_emb, psg_emb_arr, pid_dict, psg_ids, pid_subset, top_k
 
 def passage_dist_eval(args, model, tokenizer):
     base_path = args.data_dir
-    passage_path = os.path.join(base_path, "collection.tsv")
-    queries_path = os.path.join(base_path, "queries.dev.small.tsv")
+    passage_path = os.path.join(base_path, "passage/collection.tsv")
+    queries_path = os.path.join(base_path, "passage/queries.dev.small.tsv")
 
     def fn(line, i):
         return dual_process_fn(line, i, tokenizer, args)
 
-    top1000_path = os.path.join(base_path, "top1000.dev")
+    top1000_path = os.path.join(base_path, "passage/top1000.dev")
     top1k_qid_pid = parse_top_dev(top1000_path, qid_col=0, pid_col=1)
 
-    mrr_ref_path = os.path.join(base_path, "qrels.dev.small.tsv")
+    mrr_ref_path = os.path.join(base_path, "passage/qrels.dev.small.tsv")
     ref_dict = load_reference(mrr_ref_path)
 
     reranking_mrr, full_ranking_mrr = combined_dist_eval(args, model, queries_path, passage_path, fn, fn, top1k_qid_pid, ref_dict)

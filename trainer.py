@@ -399,7 +399,7 @@ def main():
     parser.add_argument("--seed", type=int, default=42, help="random seed for initialization",)
     parser.add_argument("--task_name", default="MSMarco", type=str, help="The name of the task to train selected in the list: " + ", ".join(processors.keys()),)
     # Required parameters
-    parser.add_argument("--data_dir", default="./data/MSMARCO/preprocessed", type=str, help="The input preprocessed data dir. Should contain the cached passage and query files",)
+    parser.add_argument("--data_dir", default="./data/MSMARCO", type=str, help="The input preprocessed data dir. Should contain the cached passage and query files",)
     parser.add_argument("--ann_dir", default="./data/MSMARCO/ann_data", type=str, help="The ann training data dir. Should contain the output of ann data generation job",)
     parser.add_argument("--model_type", default="rdot_nll", type=str, help="rdot_nll (FirstP) or rdot_nll_multi_chunk (MaxP)",)
     parser.add_argument("--output_dir", default="saved", type=str, help="The output directory where the model predictions and checkpoints will be written.",)
@@ -445,10 +445,10 @@ def main():
         Step 1: Dataset loading by bytes 
     '''
     # query 
-    query_collection_path = os.path.join(args.data_dir, "train-query")
+    query_collection_path = os.path.join(args.data_dir, "preprocessed/train-query")
     query_cache = EmbeddingCache(query_collection_path)
     # passages
-    passage_collection_path = os.path.join(args.data_dir, "passages")
+    passage_collection_path = os.path.join(args.data_dir, "preprocessed/passages")
     passage_cache = EmbeddingCache(passage_collection_path)
     
     '''

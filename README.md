@@ -8,21 +8,6 @@ This repo provides personal implementation of paper [Approximate Nearest Neighbo
   <b>Figure 1.</b> ANCE Asynchronous Training
 </p>
 
-## Environment
-```bash
-'transformers==2.3.0' 
-'scikit-learn' # if scikit-learn passage is not existed, it will occurs the bug of "ImportError: from transformers import glue_compute_metrics"
-'tokenizers'
-'apex'
-# git clone https://www.github.com/nvidia/apex
-# cd apex
-# python setup.py install
-'pytrec-eval'
-'faiss-cpu'
-'python==3.6.*'
-```
-## Data Preparation
-If raw data or preprocessed data has been existed, the relevant processing will be skipped. Note that raw data can be used for BM25 directly, but we need preprocessed data to train dense retrival (DR) model, e.g. BERT-Siamese.  
 The architecture of data is as follows:
 ```bash
 ANCE
@@ -32,6 +17,22 @@ ANCE
         |--passage    # raw data
         |--ann_data_* # preprocessed data (*_split* files have been removed)
 ```
+
+## Environment
+```bash
+'transformers==2.3.0' 
+'scikit-learn' # if scikit-learn passage is not existed, it will occurs the bug of "ImportError: from transformers import glue_compute_metrics"
+'tokenizers'
+'apex' # use 16-bit (mixed) precision (through NVIDIA apex) instead of 32-bit
+# git clone https://www.github.com/nvidia/apex
+# cd apex
+# python setup.py install
+'pytrec-eval'
+'faiss-cpu'
+'python==3.6.*'
+```
+## Data Preparation
+If raw data or preprocessed data has been existed, the relevant processing will be skipped. Note that raw data can be used for BM25 directly, but we need preprocessed data to train dense retrival (DR) model, e.g. BERT-Siamese.  
 **Download Dataset**
 ```bash
 python data/download_data.py
@@ -47,6 +48,15 @@ python data/msmarco_data.py 
         --max_seq_length {use 512 for ANCE FirstP, 2048 for ANCE MaxP} \ 
         --data_type {use 1 for passage, 0 for document}
 ```
+
+## BM25 Initial ANN Data
+```bash
+python data/bm25_data.py
+        --raw_data_dir raw_data_dir \
+        --data_dir preprocessed_data_dir \
+        --ann_dir ann_data_dir \
+        --negative_sample {default=1}
+```
 ## Trainer
 To train dense retrieval (DR) model(s), e.g. BERT-Siamese, that encodes the query or document to *dense embeddings*. run `train_bm25_warmup.py` to train BM25 model as pretrained model which will be used to generate initial ANN data (step [2]), termed warmup processing. run `train_bert_ance.py` to start train dense retrieval (DR) model with ANCE Negatives sampleing strategy. ANCE training will use the most recently generated ANN data, the command is as follow:**
 ```bash
@@ -59,10 +69,8 @@ python -m torch.distributed.launch --nproc_per_node=1
         --ann_dir {location of the ANN generated training data}
         --output_dir {location for checkpoint saving} \
 
-        --do_train \
         --evaluate_during_training \
-
-        --max_seq_length 128 
+        --max_seq_length 512 
         --per_gpu_eval_batch_size=256 \
         --per_gpu_train_batch_size=32 \
         --learning_rate 2e-4  \
