@@ -9,8 +9,7 @@ logger = logging.getLogger(__name__)
 import random
 import numpy as np
 ##
-from data.msmarco_data import GetTrainingDataProcessingFn, GetTripletTrainingDataProcessingFn
-from dataloader import EmbeddingCache, StreamingDataset
+from dataloader import GetTrainingDataProcessingFn, GetTripletTrainingDataProcessingFn, EmbeddingCache, StreamingDataset
 from models import MSMarcoConfigDict, ALL_MODELS
 
 from utils.util import getattr_recursive, set_seed, get_checkpoint_no, get_latest_ann_data, is_first_worker
@@ -409,10 +408,12 @@ def main():
     parser.add_argument("--do_lower_case", default=False, help="Set this flag if you are using an uncased model.",)
     # training setting
     parser.add_argument("--triplet", default=True, help="Whether to run training with (q, p_pos, p_neg).",)
+
     parser.add_argument("--max_seq_length", default=512, type=int, help="The maximum total input sequence length after tokenization. \
                                             Sequences longer than this will be truncated, sequences shorter will be padded.",)
     parser.add_argument("--max_query_length", default=64, type=int, help="The maximum total input sequence length after tokenization. \
                                             Sequences longer than this will be truncated, sequences shorter will be padded.",)
+    parser.add_argument("--evaluate_during_training", default=True, help="Rul evaluation during training at each logging step.",)
     parser.add_argument("--per_gpu_train_batch_size", default=8, type=int, help="Batch size per GPU/CPU for training.",)
     parser.add_argument("--max_steps", default=1000000, type=int, help="If > 0: set total number of training steps to perform",)
     parser.add_argument("--save_steps", type=int, default=10000, help="Save checkpoint every X updates steps.",)

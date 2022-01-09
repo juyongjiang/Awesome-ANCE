@@ -14,8 +14,7 @@ import copy
 import transformers
 import torch.distributed as dist
 ##
-from dataloader import EmbeddingCache, StreamingDataset
-from data.msmarco_data import GetProcessingFn  
+from dataloader import GetProcessingFn, EmbeddingCache, StreamingDataset
 from models import MSMarcoConfigDict, ALL_MODELS
 from utils.util import barrier_array_merge, convert_to_string_id, is_first_worker, get_checkpoint_no, get_latest_ann_data
 ##

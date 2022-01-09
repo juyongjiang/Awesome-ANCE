@@ -8,7 +8,7 @@ import argparse
 import json
 import glob
 import numpy as np
-from model.models import MSMarcoConfigDict, ALL_MODELS
+from models import MSMarcoConfigDict, ALL_MODELS
 from multiprocessing import Process
 
 # input the doc then use tokenizer to split each word id
@@ -109,7 +109,7 @@ def QueryPreprocessingFn(args, line, tokenizer):
 
     return q_id.to_bytes(8, 'big') + passage_len.to_bytes(4, 'big') + np.array(input_id_b, np.int32).tobytes()
 
-def write_passage_doc(args, in_passage_path, out_passage_path, PassagePreprocessingFn)
+def write_passage_doc(args, in_passage_path, out_passage_path, PassagePreprocessingFn):
     '''
         passage: out_passage_path
         passage_len.to_bytes(4, 'big') + content=np.array(input_id_b, np.int32).tobytes()
@@ -273,7 +273,7 @@ def main():
     parser.add_argument("--model_type", default="rdot_nll", type=str, help="Model type selected in the list: " + ", ".join(MSMarcoConfigDict.keys()),)
     parser.add_argument("--model_name_or_path", default="roberta-base", type=str, help="Path to pre-trained model or shortcut name selected in the list: " +", ".join(ALL_MODELS),)
     parser.add_argument("--do_lower_case", default=False, help="Set this flag if you are using an uncased model.",)
-    parser.add_argument("--max_seq_length", default=2048, type=int, help="The maximum total input sequence length after tokenization. Sequences longer ""than this will be truncated, sequences shorter will be padded.",)
+    parser.add_argument("--max_seq_length", default=512, type=int, help="The maximum total input sequence length after tokenization. Sequences longer ""than this will be truncated, sequences shorter will be padded.",)
     parser.add_argument("--max_query_length", default=64, type=int, help="The maximum total input sequence length after tokenization. Sequences longer ""than this will be truncated, sequences shorter will be padded.",)
     parser.add_argument("--max_doc_character", default=10000, type=int, help="used before tokenizer to save tokenizer latency",)
     parser.add_argument("--data_type", default=1, type=int, help="0 for doc, 1 for passage",)

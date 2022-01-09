@@ -5,6 +5,8 @@ import argparse
 import json
 import numpy as np
 import torch
+import torch.distributed as dist
+
 from models import MSMarcoConfigDict, ALL_MODELS
 from torch.utils.data import TensorDataset, IterableDataset
 

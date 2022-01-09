@@ -5,11 +5,12 @@ import torch.distributed as dist
 import gzip
 import faiss
 import numpy as np
-from data.process_fn import dual_process_fn
+from utils.process_fn import dual_process_fn
 from tqdm import tqdm
 import torch
 import os
-from utils.util import concat_key, is_first_worker, all_gather, StreamingDataset
+from utils.util import concat_key, is_first_worker, all_gather
+from dataloader import StreamingDataset
 from torch.utils.data import DataLoader
 
 
