@@ -20,12 +20,14 @@ def load_positive_ids(args):
 
     return training_query_positive_id
 
-def GenerateNegativePassaageID(pos_passage_idx, all_passage_idx):
+def GenerateNegativePassaageID(pos_passage_idx, all_passage_idx, negative_sample=1):
     # TODO BM25
-    neg_passage_idx = random.choice(all_passage_idx) # random selection
-    while neg_passage_idx == pos_passage_idx:
-        neg_passage_idx = random.choice(all_passage_idx)
-
+    neg_passage_idx = [] # random selection
+    for i in range(negative_sample):
+        neg_pid = random.choice(all_passage_idx)
+        while neg_pid == pos_passage_idx:
+            neg_pid = random.choice(all_passage_idx)
+        neg_passage_idx.append(neg_pid)
     return neg_passage_idx
 
 # ann_dir/ann_training_data_[output_num]-(query_id, pos_pid, neg_pid)
@@ -43,7 +45,9 @@ def generate_bm25_ann(args):
         random.shuffle(all_passage_idx)
         for query_idx, passage_idx in training_query_positive_id.items():
             neg_passage_idx = GenerateNegativePassaageID(passage_idx, all_passage_idx)
-            f.write("{}\t{}\t{}\n".format(query_idx, passage_idx, ','.join(str(neg_passage_idx))))
+            # print(neg_passage_idx)
+            # input('check')
+            f.write("{}\t{}\t{}\n".format(query_idx, passage_idx, ','.join(str(neg_pid) for neg_pid in neg_passage_idx)))
     # meta info
     ndcg_output_path = os.path.join(args.ann_dir, "ann_ndcg_" + str(output_num))
     with open(ndcg_output_path, 'w') as f:
