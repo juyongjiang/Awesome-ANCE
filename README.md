@@ -49,7 +49,7 @@ python data/msmarco_data.py 
         --data_type {use 1 for passage, 0 for document}
 ```
 
-### BM25 Initial ANN Data
+**BM25 Initial ANN Data**
 ```bash
 python data/bm25_data.py
         --raw_data_dir raw_data_dir \
@@ -58,7 +58,7 @@ python data/bm25_data.py
         --negative_sample {default=1}
 ```
 ## Trainer
-Training dense retrieval (DR) model(s), e.g. BERT-Siamese, to encode the query and document/passage to *dense embeddings* with ANCE Negatives sampling learning strategy. ANCE training will use the most recent model checkpoint to update ANN data. The command is as follow:
+Training dense retrieval (DR) model(s), e.g. BERT-Siamese, to encode the query and document/passage to *dense embeddings* with ANCE Negatives sampling learning strategy. The command is as follow:
 ```bash
 python -m torch.distributed.launch --nproc_per_node=1 trainer.py \
         --task_name MSMarco \
@@ -82,21 +82,20 @@ python -m torch.distributed.launch --nproc_per_node=1 trainer.py \
 Once training start, starting another job in parallel to fetch the latest checkpoint from the ongoing training and update the training data (ANN data). To do that, run**
 ```bash
 python -m torch.distributed.launch --nproc_per_node=gpu_no inferencer.py \
-        --training_dir {model checkpoint location} \ # if it is not existed, it will be pretrained checkpoint location automatically. 
-        --init_model_dir {pretrained BM25 warmup checkpoint location} \ 
-        --model_type rdot_nll \
-        --output_dir model_ann_data_dir \
-        --cache_dir model_ann_data_dir_cache \
         --data_dir preprocessed_data_dir \
+        --training_dir {model checkpoint location} \ # if it is not existed, it will be pretrained checkpoint location automatically. 
+        --model_type rdot_nll \
+        --model_name_or_path roberta-base \
+        --ann_dir ann_data_dir
         --max_seq_length 512 \
+        --max_query_length 64 \
         --per_gpu_eval_batch_size 16 \
         --topk_training {top k candidates for ANN search(ie:200)} \ 
-        --negative_sample {negative samples per query(20)} \ 
-        --end_output_num 0 # only set as 0 for initial data generation, do not set this otherwise
+        --negative_sample {negative samples per query(1)} \ 
 ```
 
 ## Evaluation
-The evaluation calculates full ranking and reranking metrics including **MRR, NDCG, Hole Rate, Recall** for passage/document. But dev/eval set should be specified by user. The detailed command is as follow:
+The evaluation calculates full ranking and reranking metrics including **MRR, NDCG, Hole Rate, Recall** for passage/document. The command is as follow:
 ```bash  
 python eval_metrics.py      
         --raw_data_dir {The path of raw data dir} \
