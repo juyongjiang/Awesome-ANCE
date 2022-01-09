@@ -8,6 +8,11 @@ This repo provides personal implementation of paper [Approximate Nearest Neighbo
   <b>Figure 1.</b> ANCE Asynchronous Training
 </p>
 
+<p align="center">
+  <img src="data/ance_john.png" alt="ANCE" width="700">
+  <br>
+  <b>Figure 2.</b> ANCE Code Implementation
+</p>
 <!-- The architecture of data is as follows:
 ```bash
 ANCE
