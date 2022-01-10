@@ -11,6 +11,7 @@ import time
 import pytrec_eval ##
 import csv
 import copy
+import pickle
 import transformers
 import torch.distributed as dist
 ##
@@ -470,6 +471,7 @@ def main():
     parser.add_argument("--data_dir", default="./data/MSMARCO/preprocessed", type=str, help="The preprocessed data dir",)
     parser.add_argument("--training_dir", default="./saved", type=str, help="Training dir for latest checkpoint dir in here",)
     parser.add_argument("--init_model_dir", default="", type=str, help="Initial model dir, will use this if no checkpoint is found in training_dir",)
+    parser.add_argument("--log_dir", default="log", type=str, help="log dir",)
 
     parser.add_argument("--model_type", default="rdot_nll", type=str, help="Model type selected in the list: " + ", ".join(MSMarcoConfigDict.keys()),)
     parser.add_argument("--model_name_or_path", default="roberta-base", type=str, help="Path to pre-trained model or shortcut name selected in the list: " + ", ".join(ALL_MODELS),)
