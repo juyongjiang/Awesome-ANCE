@@ -22,7 +22,7 @@ ANCE
 ANCE                    
 ├── data                    
     ├── MSMARCO  
-        ├── ann_data           
+        ├── ann_data           # generated ann data
         ├── emb_data           # dev_query / query / passage embeddings data
         ├── doc                # raw doc data
         ├── passage            # raw passage data
