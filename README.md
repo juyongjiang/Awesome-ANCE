@@ -30,7 +30,7 @@ ANCE
     ├── bm25_data.py           # generate initial ann data by BM25
     ├── download_data.py            
     └── msmarco_data.py        # preprocessing raw data of MSMARCO       
-├── saved                   l  # model checkpoint 
+├── saved                      # model checkpoint 
 ├── utils                       
 ├── dataloader.py             
 ├── evaluation.py              # run       
