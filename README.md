@@ -17,6 +17,29 @@ ANCE
         |--ann_data_* # preprocessed data (*_split* files have been removed)
 ``` -->
 
+## Master Branch
+```
+ANCE                    
+├── data                    
+    ├── MSMARCO  
+        ├── ann_data           
+        ├── emb_data           # dev_query / query / passage embeddings data
+        ├── doc                # raw doc data
+        ├── passage            # raw passage data
+        └── preprocessed       # preprocessed data
+    ├── bm25_data.py           # generate initial ann data by BM25
+    ├── download_data.py            
+    └── msmarco_data.py        # preprocessing raw data of MSMARCO       
+├── saved                   l  # model checkpoint 
+├── utils                       
+├── dataloader.py             
+├── evaluation.py              # run       
+├── inferencer.py              # run      
+├── models.py                   
+├── README                   
+└── trainer                    # run
+```
+
 ## Environment
 ```bash
 'transformers==2.3.0' 
@@ -80,7 +103,7 @@ python -m torch.distributed.launch --nproc_per_node=1 trainer.py \
 ## Inferencer
 Once training start, starting another job in parallel to fetch the latest checkpoint from the ongoing training and update the training data (ANN data). To do that, run**
 ```bash
-python -m torch.distributed.launch --nproc_per_node=gpu_no inferencer.py \
+python -m torch.distributed.launch --nproc_per_node=gpu_no --master_port port_no inferencer.py \ # avoid port conflict
         --data_dir preprocessed_data_dir \
         --training_dir {model checkpoint location} \ # if it is not existed, it will be pretrained checkpoint location automatically. 
         --model_type rdot_nll \
